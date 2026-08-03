@@ -3360,7 +3360,8 @@ function Workout({
     className: "sticky top-0 z-20 px-4 py-3 flex items-center justify-between",
     style: {
       backgroundColor: "#0B0F14",
-      borderBottom: "1px solid #212B36"
+      borderBottom: "1px solid #212B36",
+      paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)"
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "text-xs uppercase font-bold tracking-widest",
@@ -3854,7 +3855,8 @@ function Workout({
     style: {
       bottom: 0,
       backgroundColor: "#0B0F14",
-      borderTop: "1px solid #212B36"
+      borderTop: "1px solid #212B36",
+      paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)"
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onDiscard,
@@ -4449,7 +4451,8 @@ function SessionDetail({
     className: "sticky top-0 z-10 flex items-center gap-3 px-4 py-3",
     style: {
       backgroundColor: "#0B0F14",
-      borderBottom: "1px solid #212B36"
+      borderBottom: "1px solid #212B36",
+      paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)"
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onClose,
@@ -4598,7 +4601,8 @@ function ExerciseGuide({
     className: "sticky top-0 z-10 flex items-center gap-3 px-4 py-3",
     style: {
       backgroundColor: "#0B0F14",
-      borderBottom: "1px solid #212B36"
+      borderBottom: "1px solid #212B36",
+      paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)"
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onClose,
@@ -6258,7 +6262,8 @@ function Sidebar({
   }, /*#__PURE__*/React.createElement("div", {
     className: "px-5 pt-6 pb-4 flex items-center justify-between",
     style: {
-      borderBottom: "1px solid #1A222B"
+      borderBottom: "1px solid #1A222B",
+      paddingTop: "calc(env(safe-area-inset-top) + 1.5rem)"
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "text-xs uppercase font-bold tracking-widest",
@@ -6651,7 +6656,8 @@ function App() {
       backgroundColor: "#0B0F14",
       minHeight: "100vh",
       fontFamily: FONT_BODY,
-      color: "#fff"
+      color: "#fff",
+      paddingTop: "env(safe-area-inset-top)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "px-4 pt-4 pb-4",
