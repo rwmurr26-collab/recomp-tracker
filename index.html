@@ -7793,7 +7793,7 @@ function App() {
   const bProgress = bSpan > 0 ? Math.max(0, Math.min(100, (settings.startWeight - curWeight) / bSpan * 100)) : 0;
   const nutrition = computeNutrition(settings, checkins);
 
-  // Swipe left anywhere → jump back to the Home dashboard
+  // Swipe right anywhere → jump back to the Home dashboard
   const swipeRef = useRef(null);
   const inHScroller = node => {
     let el = node;
@@ -7829,8 +7829,8 @@ function App() {
     const dx = ch.clientX - s.x,
       dy = ch.clientY - s.y,
       dt = Date.now() - s.t;
-    if (dx < -80 && Math.abs(dx) > Math.abs(dy) * 1.8 && dt < 800) {
-      // clear, fast leftward swipe
+    if (dx > 80 && Math.abs(dx) > Math.abs(dy) * 1.8 && dt < 800) {
+      // clear, fast rightward swipe
       setTab("dashboard");
       setToast("🏠 Home");
       setTimeout(() => setToast(""), 1200);
