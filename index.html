@@ -7219,7 +7219,7 @@ function Sidebar({
       left: 0,
       width: 250,
       maxWidth: "80%",
-      backgroundColor: "#0E141B",
+      backgroundColor: "var(--card)",
       borderRight: "1px solid var(--border)",
       zIndex: 61,
       transform: open ? "translateX(0)" : "translateX(-100%)",
@@ -8126,7 +8126,35 @@ function App() {
       borderRadius: 6,
       boxShadow: "0 8px 24px rgba(47,128,255,0.35)"
     }
-  }, toast), /*#__PURE__*/React.createElement(Sidebar, {
+  }, toast), onboarded && !menuOpen && !guide && !detailLog && !showTest && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMenuOpen(true),
+    "aria-label": "Open navigation menu",
+    style: {
+      position: "fixed",
+      left: 0,
+      top: "50%",
+      transform: "translateY(-50%)",
+      zIndex: 45,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "var(--card)",
+      color: "var(--text)",
+      border: "1px solid var(--border)",
+      borderLeft: "none",
+      borderTopRightRadius: 12,
+      borderBottomRightRadius: 12,
+      padding: "14px 8px",
+      boxShadow: "0 2px 14px rgba(0,0,0,0.30)",
+      opacity: 0.94,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 20,
+      lineHeight: 1
+    }
+  }, "\u2630")), /*#__PURE__*/React.createElement(Sidebar, {
     open: menuOpen,
     tab: tab,
     setTab: setTab,
