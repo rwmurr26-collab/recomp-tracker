@@ -326,6 +326,58 @@ const FONT_BODY = "'Barlow Condensed', 'Oswald', sans-serif";
 const BLUE = "#2F80FF";
 const MINT = "#3FE0B5"; // Day 7 / weekly check-in accent
 
+// ---- Theming: neutral palettes (accents stay the same in both) ----
+const DARK_PAL = {
+  bg: "#0B0F14",
+  card: "#141A22",
+  panel: "#101822",
+  border: "#212B36",
+  border2: "#1A222B",
+  toggleoff: "#2E3A47",
+  text: "#ffffff",
+  text2: "#C5CDD6",
+  muted: "#9AA6B2",
+  muted2: "#7C8794",
+  faint: "#5C6773",
+  greentint: "#0F2A1C"
+};
+const LIGHT_PAL = {
+  bg: "#F4F6F9",
+  card: "#FFFFFF",
+  panel: "#EAEFF5",
+  border: "#D7DEE7",
+  border2: "#E6EBF1",
+  toggleoff: "#C7D0DB",
+  text: "#10151B",
+  text2: "#33404E",
+  muted: "#586573",
+  muted2: "#6C7783",
+  faint: "#93A0AE",
+  greentint: "#E4F6EC"
+};
+function themeVarsFor(pal) {
+  return {
+    "--bg": pal.bg,
+    "--card": pal.card,
+    "--panel": pal.panel,
+    "--border": pal.border,
+    "--border2": pal.border2,
+    "--toggleoff": pal.toggleoff,
+    "--text": pal.text,
+    "--text2": pal.text2,
+    "--muted": pal.muted,
+    "--muted2": pal.muted2,
+    "--faint": pal.faint,
+    "--greentint": pal.greentint
+  };
+}
+// "auto" follows the clock: light during the day, dark in the evening
+function resolveTheme(mode, hour) {
+  if (mode === "light") return "light";
+  if (mode === "dark") return "dark";
+  return hour >= 7 && hour < 19 ? "light" : "dark"; // auto
+}
+
 // Muscle-group color coding
 const MUSCLE_COLORS = {
   Chest: "#2F80FF",
@@ -336,7 +388,7 @@ const MUSCLE_COLORS = {
   Quads: "#FFB020",
   Hamstrings: "#FF4D8D",
   Glutes: "#FF4D8D",
-  Calves: "#9AA6B2",
+  Calves: "var(--muted)",
   Cardio: "#FF3B6B",
   Core: "#FFD23F"
 };
@@ -1359,7 +1411,7 @@ const BODYCOMP_METRICS = [{
   unit: "lb",
   good: "neutral",
   decimals: 1,
-  color: "#9AA6B2",
+  color: "var(--muted)",
   group: "Water & Bone"
 }, {
   key: "bmr",
@@ -2965,6 +3017,8 @@ const DEFAULT_SETTINGS = {
   targetDate: "2026-09-26",
   restAutoStart: true,
   restSound: true,
+  theme: "dark",
+  // "light" | "dark" | "auto"
   goalType: "Recomp",
   // Fat Loss | Muscle | Recomp | Strength
   daysPerWeek: 4,
@@ -3079,7 +3133,7 @@ function AdjBadge({
   return /*#__PURE__*/React.createElement("div", {
     className: "px-2.5 py-1 flex items-center gap-1",
     style: {
-      backgroundColor: up ? "#0F2A1C" : "#2A1216",
+      backgroundColor: up ? "var(--greentint)" : "#2A1216",
       borderRadius: 4,
       border: `1px solid ${up ? "#1E5B3A" : "#5B1E28"}`
     }
@@ -3118,14 +3172,14 @@ function StatBox({
   return /*#__PURE__*/React.createElement("div", {
     className: "flex-1 px-4 py-5 text-center",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 4,
       borderLeft: `3px solid ${BLUE}`
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-4xl font-extrabold leading-none",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, value, unit && /*#__PURE__*/React.createElement("span", {
@@ -3136,7 +3190,7 @@ function StatBox({
   }, unit)), /*#__PURE__*/React.createElement("div", {
     className: "mt-2 text-xs uppercase font-semibold tracking-widest",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, label));
 }
@@ -3367,8 +3421,8 @@ function Dashboard({
     },
     skipped: {
       label: "Skipped",
-      color: "#5C6773",
-      top: "#2E3A47"
+      color: "var(--faint)",
+      top: "var(--toggleoff)"
     }
   };
   const focusAccent = weekFocus ? weekFocus.emphasis === "fatloss" ? MUSCLE_COLORS.Cardio : weekFocus.emphasis === "muscle" ? "#00E5C0" : BLUE : BLUE;
@@ -3387,7 +3441,7 @@ function Dashboard({
   }, "\u201C", dailyQuote().t, "\u201D"), /*#__PURE__*/React.createElement("div", {
     className: "mt-1",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       fontSize: 12,
       fontWeight: 700,
       letterSpacing: "0.04em"
@@ -3409,16 +3463,16 @@ function Dashboard({
     onClick: onGoNutrition,
     className: "w-full text-left mb-6 px-4 py-4 active:opacity-80",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between mb-2"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-xs uppercase font-bold tracking-widest",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, "Today's Fuel"), /*#__PURE__*/React.createElement("span", {
     className: "text-xs font-bold",
@@ -3456,16 +3510,16 @@ function Dashboard({
       className: "flex justify-between text-xs mb-1"
     }, /*#__PURE__*/React.createElement("span", {
       style: {
-        color: "#C5CDD6"
+        color: "var(--text2)"
       }
     }, label), /*#__PURE__*/React.createElement("span", {
       style: {
-        color: "#7C8794"
+        color: "var(--muted2)"
       }
     }, val, " / ", target, " ", unit)), /*#__PURE__*/React.createElement("div", {
       style: {
         height: 7,
-        backgroundColor: "#0B0F14",
+        backgroundColor: "var(--bg)",
         borderRadius: 2,
         overflow: "hidden"
       }
@@ -3480,7 +3534,7 @@ function Dashboard({
   })), weekFocus && /*#__PURE__*/React.createElement("div", {
     className: "mb-6 px-4 py-4",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
       borderLeft: `3px solid ${focusAccent}`
     }
@@ -3492,13 +3546,13 @@ function Dashboard({
   }, "This Week's Focus", weekFocus.date ? ` · from ${weekFocus.date}` : ""), /*#__PURE__*/React.createElement("div", {
     className: "text-base font-bold mt-1",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       lineHeight: 1.4
     }
   }, weekFocus.headline), weekFocus.adjustments && weekFocus.adjustments.length > 0 && /*#__PURE__*/React.createElement("ul", {
     className: "text-sm mt-2",
     style: {
-      color: "#9AA6B2",
+      color: "var(--muted)",
       lineHeight: 1.7
     }
   }, weekFocus.adjustments.map((a, i) => /*#__PURE__*/React.createElement("li", {
@@ -3507,7 +3561,7 @@ function Dashboard({
     onClick: () => onLaunch(PLAN.find(p => p.kind === "checkin")),
     className: "w-full text-left mb-6 px-4 py-4 active:scale-95 transition-transform",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
       borderLeft: `3px solid ${MINT}`
     }
@@ -3519,20 +3573,20 @@ function Dashboard({
   }, "Start Here \xB7 Sunday"), /*#__PURE__*/React.createElement("div", {
     className: "text-base font-bold mt-1",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       lineHeight: 1.4
     }
   }, "Log this Sunday's check-in to set your week."), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mt-1",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "Enter your scale stats and the plan for the next 6 days locks in. Tap to begin \u2192")), /*#__PURE__*/React.createElement("div", {
     className: "flex items-baseline justify-between"
   }, /*#__PURE__*/React.createElement(SectionTitle, null, "This Week"), /*#__PURE__*/React.createElement("span", {
     className: "text-sm font-bold",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, started ? `${doneWk}/${trainDays.length} done${partialWk ? ` · ${partialWk} partial` : ""}` : `Starts ${fmtDate(settings.startDate, {
     weekday: "short",
@@ -3541,7 +3595,7 @@ function Dashboard({
   })}`)), tight && /*#__PURE__*/React.createElement("div", {
     className: "mb-3 px-4 py-3",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
       borderLeft: `3px solid ${MINT}`
     }
@@ -3553,12 +3607,12 @@ function Dashboard({
   }, "Make it count"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mt-1",
     style: {
-      color: "#C5CDD6",
+      color: "var(--text2)",
       lineHeight: 1.5
     }
   }, daysLeftInWeek() === 0 ? "Last day of the week" : `${daysLeftInWeek()} day${daysLeftInWeek() === 1 ? "" : "s"} left`, " \u2014 if you fit one lift in, make it ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontWeight: 700
     }
   }, liftsLeft[0].name), ". Conditioning can wait.")), /*#__PURE__*/React.createElement("div", {
@@ -3585,9 +3639,9 @@ function Dashboard({
       className: "flex flex-col",
       style: {
         position: "relative",
-        backgroundColor: "#141A22",
+        backgroundColor: "var(--card)",
         borderRadius: 4,
-        border: "1px solid #212B36",
+        border: "1px solid var(--border)",
         borderTop: `2px solid ${topColor}`,
         opacity: dim ? 0.55 : 1
       }
@@ -3619,29 +3673,29 @@ function Dashboard({
     }, fmtDayMon(dayDate)), /*#__PURE__*/React.createElement("div", {
       className: "text-2xl font-extrabold leading-tight mt-1",
       style: {
-        color: "#fff",
+        color: "var(--text)",
         fontFamily: FONT_HEAD
       }
     }, d.name), /*#__PURE__*/React.createElement("div", {
       className: "text-xs mt-2",
       style: {
-        color: su ? su.color : "#7C8794"
+        color: su ? su.color : "var(--muted2)"
       }
     }, subtitle), !isCheckin && /*#__PURE__*/React.createElement("div", {
       className: "text-xs mt-0.5",
       style: {
-        color: "#5C6773"
+        color: "var(--faint)"
       }
     }, "\u2248 ", estimateMinutes(d), " min")), !isCheckin && /*#__PURE__*/React.createElement("div", {
       className: "px-3 pb-2 pt-1",
       style: {
-        borderTop: "1px solid #1A222B"
+        borderTop: "1px solid var(--border2)"
       }
     }, status === "todo" && /*#__PURE__*/React.createElement("button", {
       onClick: () => onSkip(d.id),
       className: "text-xs font-bold uppercase tracking-wider active:opacity-60",
       style: {
-        color: "#5C6773"
+        color: "var(--faint)"
       }
     }, "Skip this week"), status === "skipped" && /*#__PURE__*/React.createElement("button", {
       onClick: () => onUndoSkip(d.id),
@@ -3666,7 +3720,7 @@ function Dashboard({
     key: i,
     className: "flex items-center px-4 py-3",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 4,
       borderLeft: `3px solid ${MUSCLE_COLORS[trendMuscle(p.exercise)] || BLUE}`
     }
@@ -3677,13 +3731,13 @@ function Dashboard({
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-lg font-bold leading-tight",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, p.exercise), /*#__PURE__*/React.createElement("div", {
     className: "text-xs",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, p.date, " \xB7 est. 1RM ", p.e1rm, " lb")), /*#__PURE__*/React.createElement("div", {
     className: "text-right"
@@ -3698,14 +3752,14 @@ function Dashboard({
   }, " lb")), /*#__PURE__*/React.createElement("div", {
     className: "text-xs",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, "\xD7 ", p.reps, " reps"))))), /*#__PURE__*/React.createElement("div", {
     className: "mt-8"
   }, /*#__PURE__*/React.createElement(SectionTitle, null, "Exercise Library"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mb-4",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, "New to lifting? Tap any exercise for step-by-step instructions and form cues."), MUSCLE_ORDER.map(m => {
     const list = CATALOG.filter(e => e.muscle === m);
@@ -3726,15 +3780,15 @@ function Dashboard({
       onClick: () => onOpenGuide(e.name),
       className: "flex items-center justify-between px-4 py-3 active:opacity-70",
       style: {
-        backgroundColor: "#141A22",
+        backgroundColor: "var(--card)",
         borderRadius: 5,
-        border: "1px solid #212B36",
+        border: "1px solid var(--border)",
         borderLeft: `3px solid ${c}`
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "text-base font-semibold text-left",
       style: {
-        color: "#fff"
+        color: "var(--text)"
       }
     }, e.name), /*#__PURE__*/React.createElement("span", {
       className: "text-sm font-bold flex-shrink-0 ml-2",
@@ -3760,9 +3814,9 @@ function EmptyState({
   return /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col items-center text-center px-6 py-10",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px dashed #2E3A47"
+      border: "1px dashed var(--toggleoff)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-4xl mb-2",
@@ -3772,13 +3826,13 @@ function EmptyState({
   }, icon), /*#__PURE__*/React.createElement("div", {
     className: "text-xl font-extrabold uppercase tracking-wide",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, title), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mt-1 max-w-xs",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, sub), cta && /*#__PURE__*/React.createElement("button", {
@@ -3797,7 +3851,7 @@ function SectionTitle({
   return /*#__PURE__*/React.createElement("h2", {
     className: "text-xl font-extrabold uppercase tracking-wider mb-3",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD,
       letterSpacing: "0.06em"
     }
@@ -4008,8 +4062,8 @@ function Workout({
   }, /*#__PURE__*/React.createElement("div", {
     className: "sticky top-0 z-20 px-4 py-3 flex items-center justify-between",
     style: {
-      backgroundColor: "#0B0F14",
-      borderBottom: "1px solid #212B36",
+      backgroundColor: "var(--bg)",
+      borderBottom: "1px solid var(--border)",
       paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)"
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
@@ -4020,7 +4074,7 @@ function Workout({
   }, day.name), /*#__PURE__*/React.createElement("div", {
     className: "text-sm font-semibold",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, today, " \xB7 \u2248 ", estimateMinutes(day), " min")), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-3"
@@ -4029,9 +4083,9 @@ function Workout({
     className: "px-3 py-2 text-sm font-extrabold uppercase tracking-wider active:scale-95 transition-transform",
     style: {
       borderRadius: 6,
-      color: running ? "#fff" : "#04120A",
+      color: running ? "var(--text)" : "#04120A",
       backgroundColor: running ? "#1E2733" : BLUE,
-      border: running ? "1px solid #2E3A47" : "none",
+      border: running ? "1px solid var(--toggleoff)" : "none",
       minWidth: 90
     }
   }, running ? "❚❚ Pause" : elapsed > 0 ? "▶ Resume" : "▶ Start"), /*#__PURE__*/React.createElement("div", {
@@ -4039,13 +4093,13 @@ function Workout({
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-3xl font-extrabold tabular-nums leading-none",
     style: {
-      color: running ? "#fff" : "#5C6773",
+      color: running ? "var(--text)" : "var(--faint)",
       fontFamily: FONT_HEAD
     }
   }, fmt(elapsed)), /*#__PURE__*/React.createElement("div", {
     className: "text-xs",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, doneCount, "/", totalCount, " sets")))), /*#__PURE__*/React.createElement("div", {
     className: "px-4 pt-4"
@@ -4055,9 +4109,9 @@ function Workout({
     onClick: () => setGymOpen(o => !o),
     className: "inline-flex items-center gap-2 px-3 py-2 active:opacity-70",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -4066,11 +4120,11 @@ function Workout({
   }, "\uD83D\uDCCD"), /*#__PURE__*/React.createElement("span", {
     className: "text-sm font-bold",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, gym ? gym.name : "Gym"), /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       fontSize: 12
     }
   }, "\u25BE")), gymOpen && /*#__PURE__*/React.createElement("div", {
@@ -4083,18 +4137,18 @@ function Workout({
       className: "px-3 py-2 text-sm font-bold active:scale-95 transition-transform",
       style: {
         borderRadius: 6,
-        color: on ? "#04120A" : "#C5CDD6",
-        backgroundColor: on ? BLUE : "#0B0F14",
-        border: `1px solid ${on ? BLUE : "#212B36"}`
+        color: on ? "#04120A" : "var(--text2)",
+        backgroundColor: on ? BLUE : "var(--bg)",
+        border: `1px solid ${on ? BLUE : "var(--border)"}`
       }
     }, g.name);
   }))), day.gymName && (day.swaps?.length > 0 || day.unavailable > 0) && /*#__PURE__*/React.createElement("div", {
     className: "mb-4 px-4 py-3 text-sm",
     style: {
-      backgroundColor: "#101822",
+      backgroundColor: "var(--panel)",
       borderRadius: 6,
       borderLeft: `3px solid #00C2FF`,
-      color: "#C5CDD6",
+      color: "var(--text2)",
       lineHeight: 1.5
     }
   }, /*#__PURE__*/React.createElement("span", {
@@ -4112,7 +4166,7 @@ function Workout({
       backgroundColor: "#1E1A10",
       borderRadius: 6,
       borderLeft: `3px solid #FFB020`,
-      color: "#C5CDD6",
+      color: "var(--text2)",
       lineHeight: 1.5
     }
   }, /*#__PURE__*/React.createElement("span", {
@@ -4123,10 +4177,10 @@ function Workout({
   }, "Ease back in: "), day.easeNote), day.focusNote && /*#__PURE__*/React.createElement("div", {
     className: "mb-4 px-4 py-3 text-sm",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
       borderLeft: `3px solid ${MINT}`,
-      color: "#C5CDD6",
+      color: "var(--text2)",
       lineHeight: 1.5
     }
   }, /*#__PURE__*/React.createElement("span", {
@@ -4144,10 +4198,10 @@ function Workout({
     key: ex.key,
     className: "mb-4",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
       overflow: "hidden",
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between px-4 pt-3 pb-2"
@@ -4157,7 +4211,7 @@ function Workout({
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-xl font-extrabold leading-tight flex items-center gap-1.5",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, ex.name, /*#__PURE__*/React.createElement("span", {
@@ -4199,7 +4253,7 @@ function Workout({
   }, "No gear here \u2014 skip/sub"))), /*#__PURE__*/React.createElement("div", {
     className: "grid px-4 pb-1 text-xs uppercase font-bold tracking-wider",
     style: {
-      color: "#5C6773",
+      color: "var(--faint)",
       gridTemplateColumns: "34px 1fr 1fr 1fr 44px",
       gap: "6px"
     }
@@ -4211,18 +4265,18 @@ function Workout({
     style: {
       gridTemplateColumns: "34px 1fr 1fr 1fr 44px",
       gap: "6px",
-      backgroundColor: st.done ? "#0F2A1C" : "transparent"
+      backgroundColor: st.done ? "var(--greentint)" : "transparent"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-lg font-bold",
     style: {
-      color: st.done ? "#22C55E" : "#9AA6B2",
+      color: st.done ? "#22C55E" : "var(--muted)",
       fontFamily: FONT_HEAD
     }
   }, setI + 1), /*#__PURE__*/React.createElement("div", {
     className: "text-sm",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, st.prev), /*#__PURE__*/React.createElement("input", {
     inputMode: "numeric",
@@ -4231,10 +4285,10 @@ function Workout({
     placeholder: "\u2014",
     className: "w-full px-2 py-1.5 text-base font-bold outline-none",
     style: {
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 3,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "center"
     }
   }), /*#__PURE__*/React.createElement("input", {
@@ -4244,10 +4298,10 @@ function Workout({
     placeholder: "\u2014",
     className: "w-full px-2 py-1.5 text-base font-bold outline-none",
     style: {
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 3,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "center"
     }
   }), /*#__PURE__*/React.createElement("button", {
@@ -4258,9 +4312,9 @@ function Workout({
       width: 34,
       margin: "0 auto",
       borderRadius: 4,
-      backgroundColor: st.done ? "#22C55E" : "#0B0F14",
-      border: st.done ? "none" : "1px solid #2E3A47",
-      color: st.done ? "#04120A" : "#5C6773",
+      backgroundColor: st.done ? "#22C55E" : "var(--bg)",
+      border: st.done ? "none" : "1px solid var(--toggleoff)",
+      color: st.done ? "#04120A" : "var(--faint)",
       fontWeight: 900,
       fontSize: 18
     }
@@ -4269,13 +4323,13 @@ function Workout({
     className: "w-full py-2 text-sm font-bold uppercase tracking-wider active:opacity-70",
     style: {
       color: BLUE,
-      borderTop: "1px solid #212B36"
+      borderTop: "1px solid var(--border)"
     }
   }, "+ Add Set"))), /*#__PURE__*/React.createElement("button", {
     onClick: () => setPicker(p => !p),
     className: "w-full py-3 text-base font-extrabold uppercase tracking-wider mb-2 active:scale-95 transition-transform",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       backgroundColor: "transparent",
       border: `1.5px dashed ${BLUE}`,
       borderRadius: 6
@@ -4283,9 +4337,9 @@ function Workout({
   }, "+ Add Exercise"), picker && /*#__PURE__*/React.createElement("div", {
     className: "mb-3",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex gap-2 overflow-x-auto px-3 py-3",
@@ -4298,9 +4352,9 @@ function Workout({
     className: "whitespace-nowrap px-3 py-1 text-xs uppercase font-bold tracking-wider",
     style: {
       borderRadius: 999,
-      color: pickerMuscle === m ? "#04120A" : "#9AA6B2",
-      backgroundColor: pickerMuscle === m ? BLUE : "#0B0F14",
-      border: "1px solid #212B36"
+      color: pickerMuscle === m ? "#04120A" : "var(--muted)",
+      backgroundColor: pickerMuscle === m ? BLUE : "var(--bg)",
+      border: "1px solid var(--border)"
     }
   }, m))), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4312,19 +4366,19 @@ function Workout({
     onClick: () => addExercise(lib),
     className: "w-full flex items-center justify-between px-4 py-3 active:opacity-70",
     style: {
-      borderTop: "1px solid #1A222B"
+      borderTop: "1px solid var(--border2)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "min-w-0"
   }, /*#__PURE__*/React.createElement("span", {
     className: "block text-base font-semibold truncate",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, lib.name), lib.level && /*#__PURE__*/React.createElement("span", {
     className: "text-xs",
     style: {
-      color: LEVEL_COLORS[lib.level] || "#7C8794"
+      color: LEVEL_COLORS[lib.level] || "var(--muted2)"
     }
   }, lib.level)), /*#__PURE__*/React.createElement(MuscleTag, {
     muscle: lib.muscle,
@@ -4336,26 +4390,26 @@ function Workout({
   }), /*#__PURE__*/React.createElement("div", {
     className: "mt-2 mb-4 px-4 py-4",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
       borderLeft: `3px solid ${BLUE}`
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-xl font-extrabold uppercase tracking-wide",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, "Workout Review"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mt-1 mb-4",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, "Log the weight you actually did in each set above, then rate how it went \u2014 the app tunes next session's weights from this."), /*#__PURE__*/React.createElement("div", {
     className: "text-xs uppercase font-bold tracking-widest mb-2",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "Overall \xB7 ", rating ? `${rating}/10` : "tap to rate"), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-wrap gap-1.5 mb-5"
@@ -4372,14 +4426,14 @@ function Workout({
       fontWeight: 800,
       fontFamily: FONT_HEAD,
       fontSize: 16,
-      color: rating >= n ? "#04120A" : "#9AA6B2",
-      backgroundColor: rating >= n ? BLUE : "#0B0F14",
-      border: "1px solid #212B36"
+      color: rating >= n ? "#04120A" : "var(--muted)",
+      backgroundColor: rating >= n ? BLUE : "var(--bg)",
+      border: "1px solid var(--border)"
     }
   }, n))), /*#__PURE__*/React.createElement("div", {
     className: "text-xs uppercase font-bold tracking-widest mb-2",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "How did each lift feel? & did you like it?"), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-2 mb-5"
@@ -4387,16 +4441,16 @@ function Workout({
     key: ex.key,
     className: "px-3 py-2",
     style: {
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       borderRadius: 5,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between mb-2"
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-sm font-semibold",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, ex.name), /*#__PURE__*/React.createElement("div", {
     className: "flex gap-1.5 flex-shrink-0"
@@ -4405,8 +4459,8 @@ function Workout({
     className: "px-2 py-1 text-sm active:scale-90 transition-transform",
     style: {
       borderRadius: 4,
-      backgroundColor: ex.liked === "up" ? "#0F2A1C" : "transparent",
-      border: `1px solid ${ex.liked === "up" ? "#1E5B3A" : "#212B36"}`,
+      backgroundColor: ex.liked === "up" ? "var(--greentint)" : "transparent",
+      border: `1px solid ${ex.liked === "up" ? "#1E5B3A" : "var(--border)"}`,
       opacity: ex.liked === "up" ? 1 : 0.7
     },
     title: "More of this"
@@ -4416,7 +4470,7 @@ function Workout({
     style: {
       borderRadius: 4,
       backgroundColor: ex.liked === "down" ? "#2A1216" : "transparent",
-      border: `1px solid ${ex.liked === "down" ? "#5B1E28" : "#212B36"}`,
+      border: `1px solid ${ex.liked === "down" ? "#5B1E28" : "var(--border)"}`,
       opacity: ex.liked === "down" ? 1 : 0.7
     },
     title: "Less of this"
@@ -4432,13 +4486,13 @@ function Workout({
         borderRadius: 4,
         color: sel ? "#04120A" : col,
         backgroundColor: sel ? col : "transparent",
-        border: `1px solid ${sel ? col : "#212B36"}`
+        border: `1px solid ${sel ? col : "var(--border)"}`
       }
     }, label);
   }))))), /*#__PURE__*/React.createElement("div", {
     className: "text-xs uppercase font-bold tracking-widest mb-2",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "Notes for next time"), /*#__PURE__*/React.createElement("textarea", {
     value: notes,
@@ -4447,10 +4501,10 @@ function Workout({
     placeholder: "e.g. left knee felt tight on squats \xB7 bump bench up next week\u2026",
     className: "w-full px-3 py-2 text-sm outline-none",
     style: {
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 5,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       resize: "vertical",
       fontFamily: FONT_BODY
     }
@@ -4462,9 +4516,9 @@ function Workout({
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-3 px-4 py-2.5",
     style: {
-      backgroundColor: rest.remaining <= 0 ? "#0F2A1C" : "#101822",
+      backgroundColor: rest.remaining <= 0 ? "var(--greentint)" : "var(--panel)",
       borderRadius: 8,
-      border: `1px solid ${rest.remaining <= 0 ? "#1E5B3A" : "#2E3A47"}`,
+      border: `1px solid ${rest.remaining <= 0 ? "#1E5B3A" : "var(--toggleoff)"}`,
       boxShadow: "0 6px 20px rgba(0,0,0,0.4)"
     }
   }, /*#__PURE__*/React.createElement("span", {
@@ -4475,14 +4529,14 @@ function Workout({
   }, rest.remaining <= 0 ? "Rest done" : "Rest"), /*#__PURE__*/React.createElement("span", {
     className: "text-2xl font-extrabold tabular-nums leading-none",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD,
       minWidth: 56
     }
   }, fmt(Math.max(0, rest.remaining))), /*#__PURE__*/React.createElement("span", {
     className: "text-xs flex-1 truncate",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, rest.name), /*#__PURE__*/React.createElement("button", {
     onClick: () => setRest(r => r ? {
@@ -4497,14 +4551,14 @@ function Workout({
     onClick: () => setRest(null),
     className: "px-2 py-1 text-xs font-bold active:opacity-60",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "Skip"))), /*#__PURE__*/React.createElement("div", {
     className: "fixed left-0 right-0 z-30 px-4 py-3 flex gap-3",
     style: {
       bottom: 0,
-      backgroundColor: "#0B0F14",
-      borderTop: "1px solid #212B36",
+      backgroundColor: "var(--bg)",
+      borderTop: "1px solid var(--border)",
       paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)"
     }
   }, /*#__PURE__*/React.createElement("button", {
@@ -4560,14 +4614,14 @@ function TargetChip({
   return /*#__PURE__*/React.createElement("div", {
     className: "px-2.5 py-1",
     style: {
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       borderRadius: 4,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-xs uppercase font-bold tracking-wider mr-1.5",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, label), /*#__PURE__*/React.createElement("span", {
     className: "text-sm font-bold",
@@ -4582,7 +4636,7 @@ function GuidanceBanner({
   return /*#__PURE__*/React.createElement("div", {
     className: "mb-4 px-4 py-3",
     style: {
-      backgroundColor: "#101822",
+      backgroundColor: "var(--panel)",
       borderRadius: 6,
       borderLeft: `3px solid ${BLUE}`
     }
@@ -4595,13 +4649,13 @@ function GuidanceBanner({
   }, "How to load & pace"), cardio ? /*#__PURE__*/React.createElement("div", {
     className: "text-sm",
     style: {
-      color: "#9AA6B2",
+      color: "var(--muted)",
       lineHeight: 1.55
     }
   }, "Push hard during the work intervals (about an 8\u20139 out of 10 effort) and go genuinely easy during the rest so you recover. The set \xD7 time and rest for each move are listed on its card.") : /*#__PURE__*/React.createElement("div", {
     className: "text-sm",
     style: {
-      color: "#9AA6B2",
+      color: "var(--muted)",
       lineHeight: 1.55
     }
   }, "Pick a weight where the last 1\u20132 reps of each set feel tough but doable with good form. Lower the weight for about 2 seconds, pause briefly, then lift with control (roughly a 2-0-1 count). Rest the amount shown on each exercise before your next set. When you can hit the top of the rep range on every set, add a little weight next time."));
@@ -4614,7 +4668,7 @@ function PhaseCard({
   return /*#__PURE__*/React.createElement("div", {
     className: "mb-4 px-4 py-3",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
       borderLeft: `3px solid ${accent}`
     }
@@ -4627,7 +4681,7 @@ function PhaseCard({
   }, title), /*#__PURE__*/React.createElement("ul", {
     className: "text-sm",
     style: {
-      color: "#9AA6B2",
+      color: "var(--muted)",
       lineHeight: 1.7
     }
   }, items.map((it, i) => /*#__PURE__*/React.createElement("li", {
@@ -4658,9 +4712,9 @@ function History({
     onClick: () => onOpenDetail && onOpenDetail(h),
     className: "px-4 py-4 active:opacity-70",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       cursor: "pointer"
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -4668,18 +4722,18 @@ function History({
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "text-xl font-extrabold leading-tight",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, h.name), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-0.5",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, h.date)), /*#__PURE__*/React.createElement("div", {
     className: "text-right text-xs",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-base font-bold",
@@ -4690,8 +4744,8 @@ function History({
   }, h.duration), /*#__PURE__*/React.createElement("div", null, h.sets, " sets", h.rating ? ` · ${h.rating}/10` : "", h.partial ? " · partial" : ""))), h.notes ? /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-2 px-3 py-2",
     style: {
-      color: "#9AA6B2",
-      backgroundColor: "#0B0F14",
+      color: "var(--muted)",
+      backgroundColor: "var(--bg)",
       borderRadius: 4,
       borderLeft: `2px solid ${BLUE}`,
       lineHeight: 1.5
@@ -4704,10 +4758,10 @@ function History({
       key: i,
       className: "inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold",
       style: {
-        backgroundColor: isPR ? "#1E2A12" : "#0B0F14",
-        color: isPR ? "#FFB020" : "#9AA6B2",
+        backgroundColor: isPR ? "#1E2A12" : "var(--bg)",
+        color: isPR ? "#FFB020" : "var(--muted)",
         borderRadius: 3,
-        border: `1px solid ${isPR ? "#3A3016" : "#212B36"}`
+        border: `1px solid ${isPR ? "#3A3016" : "var(--border)"}`
       }
     }, isPR && /*#__PURE__*/React.createElement("span", null, "\uD83C\uDFC6"), ex);
   }))))));
@@ -4751,9 +4805,9 @@ function GoalChart({
   return /*#__PURE__*/React.createElement("div", {
     className: "px-4 py-4 mb-6",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-baseline justify-between mb-1"
@@ -4777,12 +4831,12 @@ function GoalChart({
     x: 2,
     y: ys(maxW) + 4,
     fontSize: "9",
-    fill: "#5C6773"
+    fill: "var(--faint)"
   }, maxW), /*#__PURE__*/React.createElement("text", {
     x: 2,
     y: ys(minW) + 4,
     fontSize: "9",
-    fill: "#5C6773"
+    fill: "var(--faint)"
   }, minW), /*#__PURE__*/React.createElement("line", {
     x1: padL,
     y1: ys(goalW),
@@ -4795,7 +4849,7 @@ function GoalChart({
   }), /*#__PURE__*/React.createElement("path", {
     d: goalPath,
     fill: "none",
-    stroke: "#5C6773",
+    stroke: "var(--faint)",
     strokeWidth: "1.5",
     strokeDasharray: "4 4"
   }), actualPts.length > 1 && /*#__PURE__*/React.createElement("path", {
@@ -4814,14 +4868,14 @@ function GoalChart({
   }))), /*#__PURE__*/React.createElement("div", {
     className: "flex justify-between mt-1 text-xs",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, /*#__PURE__*/React.createElement("span", null, fmtDate(settings.startDate, {
     month: "short",
     day: "numeric"
   })), /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "\u2014 \u2014 goal pace"), /*#__PURE__*/React.createElement("span", null, fmtDate(settings.targetDate, {
     month: "short",
@@ -4829,11 +4883,11 @@ function GoalChart({
   }))), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mt-2",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "Now ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontWeight: 700
     }
   }, cur, " lb"), " \xB7 pace target today \u2248 ", /*#__PURE__*/React.createElement("span", {
@@ -4865,7 +4919,7 @@ function Progress({
   }), /*#__PURE__*/React.createElement(SectionTitle, null, "Body Composition"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mb-4",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, hasTrend ? `${checkins.length} check-ins logged since ${checkins[0].date}. Green means moving the right way for recomposition.` : `Baseline logged ${checkins[0] ? checkins[0].date : ""}. Log a Sunday check-in to start your trends.`), CHECKIN_GROUPS.map(group => /*#__PURE__*/React.createElement("div", {
@@ -4874,7 +4928,7 @@ function Progress({
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-sm font-bold uppercase tracking-widest mb-2",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, group), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-3"
@@ -4885,9 +4939,9 @@ function Progress({
         key: m.key,
         className: "flex items-center px-4 py-3",
         style: {
-          backgroundColor: "#141A22",
+          backgroundColor: "var(--card)",
           borderRadius: 6,
-          border: "1px solid #212B36",
+          border: "1px solid var(--border)",
           borderLeft: `3px solid ${m.color}`
         }
       }, /*#__PURE__*/React.createElement("div", {
@@ -4895,12 +4949,12 @@ function Progress({
       }, /*#__PURE__*/React.createElement("div", {
         className: "text-sm font-bold uppercase tracking-wide",
         style: {
-          color: "#C5CDD6"
+          color: "var(--text2)"
         }
       }, m.label), /*#__PURE__*/React.createElement("div", {
         className: "text-xs mt-1",
         style: {
-          color: "#5C6773"
+          color: "var(--faint)"
         }
       }, "no data yet")));
     }
@@ -4909,15 +4963,15 @@ function Progress({
     const delta = +(cur - first).toFixed(m.decimals);
     const neutral = m.good === "neutral";
     const improving = neutral || delta === 0 ? null : m.good === "down" ? delta < 0 : delta > 0;
-    const deltaColor = improving === null ? "#7C8794" : improving ? "#22C55E" : "#FF6B81";
+    const deltaColor = improving === null ? "var(--muted2)" : improving ? "#22C55E" : "#FF6B81";
     const deltaStr = `${delta > 0 ? "+" : ""}${delta}${m.unit}`;
     return /*#__PURE__*/React.createElement("div", {
       key: m.key,
       className: "flex items-center px-4 py-3",
       style: {
-        backgroundColor: "#141A22",
+        backgroundColor: "var(--card)",
         borderRadius: 6,
-        border: "1px solid #212B36",
+        border: "1px solid var(--border)",
         borderLeft: `3px solid ${m.color}`
       }
     }, /*#__PURE__*/React.createElement("div", {
@@ -4925,12 +4979,12 @@ function Progress({
     }, /*#__PURE__*/React.createElement("div", {
       className: "text-sm font-bold uppercase tracking-wide",
       style: {
-        color: "#C5CDD6"
+        color: "var(--text2)"
       }
     }, m.label, neutral ? /*#__PURE__*/React.createElement("span", {
       className: "ml-1.5 text-xs",
       style: {
-        color: "#5C6773"
+        color: "var(--faint)"
       }
     }, "\xB7 info") : null), /*#__PURE__*/React.createElement("div", {
       className: "mt-1"
@@ -4958,13 +5012,13 @@ function Progress({
     }) : /*#__PURE__*/React.createElement("span", {
       className: "text-xs",
       style: {
-        color: "#5C6773"
+        color: "var(--faint)"
       }
     }, "\u2014")));
   })))), /*#__PURE__*/React.createElement("div", {
     className: "text-xs text-center mb-6",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "Add a check-in from the Sunday card on your Home screen each week."), /*#__PURE__*/React.createElement(SectionTitle, null, "Strength \xB7 Est. 1RM"), strengthNames.length === 0 ? /*#__PURE__*/React.createElement(EmptyState, {
     icon: "\uD83C\uDFCB\uFE0F",
@@ -4984,16 +5038,16 @@ function Progress({
       key: name,
       className: "flex items-center px-4 py-3",
       style: {
-        backgroundColor: "#141A22",
+        backgroundColor: "var(--card)",
         borderRadius: 6,
-        border: "1px solid #212B36"
+        border: "1px solid var(--border)"
       }
     }, /*#__PURE__*/React.createElement("div", {
       className: "flex-1 min-w-0"
     }, /*#__PURE__*/React.createElement("div", {
       className: "text-lg font-extrabold leading-tight truncate",
       style: {
-        color: "#fff",
+        color: "var(--text)",
         fontFamily: FONT_HEAD
       }
     }, name), /*#__PURE__*/React.createElement("div", {
@@ -5011,7 +5065,7 @@ function Progress({
     }, /*#__PURE__*/React.createElement("span", {
       className: "text-xs uppercase tracking-widest font-bold",
       style: {
-        color: "#7C8794"
+        color: "var(--muted2)"
       }
     }, "Best 1RM "), /*#__PURE__*/React.createElement("span", {
       className: "text-2xl font-extrabold",
@@ -5032,7 +5086,7 @@ function Progress({
     }) : /*#__PURE__*/React.createElement("span", {
       className: "text-xs",
       style: {
-        color: "#5C6773"
+        color: "var(--faint)"
       }
     }, "\u2014")));
   })), /*#__PURE__*/React.createElement(SectionTitle, null, "Data & Backup"), /*#__PURE__*/React.createElement("div", {
@@ -5048,10 +5102,10 @@ function Progress({
   }, "\u2913 Export backup (.json)"), /*#__PURE__*/React.createElement("label", {
     className: "w-full py-3 text-sm font-extrabold uppercase tracking-wider text-center active:opacity-70",
     style: {
-      color: "#fff",
-      backgroundColor: "#141A22",
+      color: "var(--text)",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       cursor: "pointer"
     }
   }, "\u2912 Import backup", /*#__PURE__*/React.createElement("input", {
@@ -5073,7 +5127,7 @@ function Progress({
   }, "Reset all data")), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-3",
     style: {
-      color: "#5C6773",
+      color: "var(--faint)",
       lineHeight: 1.5
     }
   }, "Your data lives on this device. Export a backup before switching phones or clearing Safari \u2014 import it to restore everything."));
@@ -5093,14 +5147,14 @@ function SessionDetail({
   return /*#__PURE__*/React.createElement("div", {
     className: "fixed inset-0 z-50",
     style: {
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       overflowY: "auto"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "sticky top-0 z-10 flex items-center gap-3 px-4 py-3",
     style: {
-      backgroundColor: "#0B0F14",
-      borderBottom: "1px solid #212B36",
+      backgroundColor: "var(--bg)",
+      borderBottom: "1px solid var(--border)",
       paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)"
     }
   }, /*#__PURE__*/React.createElement("button", {
@@ -5112,26 +5166,26 @@ function SessionDetail({
   }, "\u2039"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm font-bold uppercase tracking-wider",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "Session Recap")), /*#__PURE__*/React.createElement("div", {
     className: "px-4 pt-4 pb-16"
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-3xl font-extrabold leading-tight",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, log.name), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mt-1",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, meta), log.notes ? /*#__PURE__*/React.createElement("div", {
     className: "text-sm mt-3 px-3 py-2",
     style: {
-      color: "#9AA6B2",
-      backgroundColor: "#141A22",
+      color: "var(--muted)",
+      backgroundColor: "var(--card)",
       borderRadius: 5,
       borderLeft: `2px solid ${BLUE}`,
       lineHeight: 1.5
@@ -5144,9 +5198,9 @@ function SessionDetail({
     return /*#__PURE__*/React.createElement("div", {
       key: exI,
       style: {
-        backgroundColor: "#141A22",
+        backgroundColor: "var(--card)",
         borderRadius: 6,
-        border: "1px solid #212B36",
+        border: "1px solid var(--border)",
         overflow: "hidden"
       }
     }, /*#__PURE__*/React.createElement("button", {
@@ -5157,7 +5211,7 @@ function SessionDetail({
     }, isPR && /*#__PURE__*/React.createElement("span", null, "\uD83C\uDFC6"), /*#__PURE__*/React.createElement("span", {
       className: "text-xl font-extrabold leading-tight",
       style: {
-        color: "#fff",
+        color: "var(--text)",
         fontFamily: FONT_HEAD
       }
     }, ex.name), /*#__PURE__*/React.createElement("span", {
@@ -5174,7 +5228,7 @@ function SessionDetail({
     }))), /*#__PURE__*/React.createElement("div", {
       className: "grid px-4 pb-1 text-xs uppercase font-bold tracking-wider",
       style: {
-        color: "#5C6773",
+        color: "var(--faint)",
         gridTemplateColumns: "34px 1fr 1fr 44px",
         gap: "6px"
       }
@@ -5186,23 +5240,23 @@ function SessionDetail({
       style: {
         gridTemplateColumns: "34px 1fr 1fr 44px",
         gap: "6px",
-        backgroundColor: s.done ? "#0F2A1C" : "transparent"
+        backgroundColor: s.done ? "var(--greentint)" : "transparent"
       }
     }, /*#__PURE__*/React.createElement("div", {
       className: "text-base font-bold",
       style: {
-        color: s.done ? "#22C55E" : "#9AA6B2",
+        color: s.done ? "#22C55E" : "var(--muted)",
         fontFamily: FONT_HEAD
       }
     }, i + 1), /*#__PURE__*/React.createElement("div", {
       className: "text-sm font-bold",
       style: {
-        color: "#C5CDD6"
+        color: "var(--text2)"
       }
     }, s.weight || "—"), /*#__PURE__*/React.createElement("div", {
       className: "text-sm font-bold",
       style: {
-        color: "#C5CDD6"
+        color: "var(--text2)"
       }
     }, s.reps || "—"), /*#__PURE__*/React.createElement("div", {
       className: "text-center",
@@ -5214,8 +5268,8 @@ function SessionDetail({
   })) : /*#__PURE__*/React.createElement("div", {
     className: "mt-5 text-sm px-4 py-3",
     style: {
-      color: "#7C8794",
-      backgroundColor: "#141A22",
+      color: "var(--muted2)",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
       lineHeight: 1.5
     }
@@ -5243,14 +5297,14 @@ function ExerciseGuide({
   return /*#__PURE__*/React.createElement("div", {
     className: "fixed inset-0 z-50",
     style: {
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       overflowY: "auto"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "sticky top-0 z-10 flex items-center gap-3 px-4 py-3",
     style: {
-      backgroundColor: "#0B0F14",
-      borderBottom: "1px solid #212B36",
+      backgroundColor: "var(--bg)",
+      borderBottom: "1px solid var(--border)",
       paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)"
     }
   }, /*#__PURE__*/React.createElement("button", {
@@ -5262,14 +5316,14 @@ function ExerciseGuide({
   }, "\u2039"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm font-bold uppercase tracking-wider",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "Exercise Guide")), /*#__PURE__*/React.createElement("div", {
     className: "px-4 pt-4 pb-16"
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-3xl font-extrabold leading-tight",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, name), /*#__PURE__*/React.createElement("div", {
@@ -5279,26 +5333,26 @@ function ExerciseGuide({
   }), level && /*#__PURE__*/React.createElement("span", {
     className: "inline-flex items-center text-xs px-2 py-1 uppercase font-bold tracking-wider",
     style: {
-      color: LEVEL_COLORS[level] || "#9AA6B2",
-      backgroundColor: (LEVEL_COLORS[level] || "#9AA6B2") + "22",
+      color: LEVEL_COLORS[level] || "var(--muted)",
+      backgroundColor: (LEVEL_COLORS[level] || "var(--muted)") + "22",
       borderRadius: 2
     }
   }, level)), equipment && /*#__PURE__*/React.createElement("div", {
     className: "mt-3 px-4 py-2.5 flex items-center gap-2",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 5,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-xs uppercase font-bold tracking-widest",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "Equipment"), /*#__PURE__*/React.createElement("span", {
     className: "text-sm font-semibold",
     style: {
-      color: "#C5CDD6"
+      color: "var(--text2)"
     }
   }, equipment)), g ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "mt-6"
@@ -5308,9 +5362,9 @@ function ExerciseGuide({
     key: i,
     className: "flex gap-3 px-4 py-3",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 5,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-lg font-extrabold flex-shrink-0",
@@ -5321,7 +5375,7 @@ function ExerciseGuide({
   }, i + 1), /*#__PURE__*/React.createElement("span", {
     className: "text-sm",
     style: {
-      color: "#C5CDD6",
+      color: "var(--text2)",
       lineHeight: 1.5
     }
   }, s))))), /*#__PURE__*/React.createElement("div", {
@@ -5329,14 +5383,14 @@ function ExerciseGuide({
   }, /*#__PURE__*/React.createElement(SectionTitle, null, "Form Cues"), /*#__PURE__*/React.createElement("div", {
     className: "px-4 py-3",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 5,
       borderLeft: `3px solid ${c}`
     }
   }, /*#__PURE__*/React.createElement("ul", {
     className: "text-sm",
     style: {
-      color: "#9AA6B2",
+      color: "var(--muted)",
       lineHeight: 1.9
     }
   }, g.tips.map((t, i) => /*#__PURE__*/React.createElement("li", {
@@ -5344,14 +5398,14 @@ function ExerciseGuide({
   }, "\u2022 ", t)))))) : /*#__PURE__*/React.createElement("div", {
     className: "mt-6 text-sm",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, "Instructions coming soon for this movement."), /*#__PURE__*/React.createElement("div", {
     className: "mt-6 px-4 py-3 text-sm",
     style: {
-      backgroundColor: "#101822",
+      backgroundColor: "var(--panel)",
       borderRadius: 5,
-      color: "#9AA6B2",
+      color: "var(--muted)",
       borderLeft: `3px solid ${MUSCLE_COLORS.Core}`,
       lineHeight: 1.5
     }
@@ -5406,17 +5460,17 @@ function Calendar({
     onClick: () => setOffset(o => o - 1),
     className: "px-3 py-2 text-lg font-bold active:opacity-60",
     style: {
-      color: "#9AA6B2",
-      backgroundColor: "#141A22",
+      color: "var(--muted)",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, "\u2039"), /*#__PURE__*/React.createElement("div", {
     className: "text-center"
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-2xl font-extrabold uppercase tracking-wide",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, monthName), /*#__PURE__*/React.createElement("div", {
@@ -5428,10 +5482,10 @@ function Calendar({
     onClick: () => setOffset(o => o + 1),
     className: "px-3 py-2 text-lg font-bold active:opacity-60",
     style: {
-      color: "#9AA6B2",
-      backgroundColor: "#141A22",
+      color: "var(--muted)",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, "\u203A")), /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-7 gap-1 mb-1"
@@ -5439,7 +5493,7 @@ function Calendar({
     key: i,
     className: "text-center text-xs font-bold uppercase",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, d))), /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-7 gap-1"
@@ -5462,14 +5516,14 @@ function Calendar({
       className: "flex flex-col items-center justify-start pt-1 pb-1 active:scale-95 transition-transform",
       style: {
         minHeight: 62,
-        backgroundColor: isDone ? "#0F2A1C" : "#141A22",
+        backgroundColor: isDone ? "var(--greentint)" : "var(--card)",
         borderRadius: 5,
-        border: isToday ? `1.5px solid ${BLUE}` : "1px solid #212B36"
+        border: isToday ? `1.5px solid ${BLUE}` : "1px solid var(--border)"
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "text-sm font-bold",
       style: {
-        color: isToday ? BLUE : "#C5CDD6"
+        color: isToday ? BLUE : "var(--text2)"
       }
     }, d), plan ? /*#__PURE__*/React.createElement("span", {
       className: "mt-1 flex flex-col items-center",
@@ -5502,12 +5556,12 @@ function Calendar({
   }), /*#__PURE__*/React.createElement("span", {
     className: "text-xs",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, "\xB7 each lift day has its own color"), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-1.5 text-xs",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -5519,7 +5573,7 @@ function Calendar({
   }), " Today"), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-1.5 text-xs",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -5529,7 +5583,7 @@ function Calendar({
   }, "\u2713"), " Completed")), /*#__PURE__*/React.createElement("div", {
     className: "text-xs text-center mt-5",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "Tap a training day to start it, or a completed (green) day to review what you did"));
 }
@@ -5540,7 +5594,7 @@ function LegendDot({
   return /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-1.5 text-xs",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
@@ -5594,13 +5648,13 @@ function CheckIn({
   }, label), /*#__PURE__*/React.createElement("div", {
     className: "text-3xl font-extrabold leading-tight mt-1",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, title), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mt-1 mb-5",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, intro || `${today} — punch in today's numbers from your scale. This sets next week's focus and adds a point to your Progress trends.`), CHECKIN_GROUPS.map(group => /*#__PURE__*/React.createElement("div", {
@@ -5609,7 +5663,7 @@ function CheckIn({
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-sm font-bold uppercase tracking-widest mb-2",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, group), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-2"
@@ -5619,20 +5673,20 @@ function CheckIn({
       key: m.key,
       className: "flex items-center justify-between px-4 py-3",
       style: {
-        backgroundColor: "#141A22",
+        backgroundColor: "var(--card)",
         borderRadius: 6,
-        border: "1px solid #212B36",
+        border: "1px solid var(--border)",
         borderLeft: `3px solid ${m.color}`
       }
     }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
       className: "text-base font-bold",
       style: {
-        color: "#fff"
+        color: "var(--text)"
       }
     }, m.label, m.unit ? ` (${m.unit})` : ""), /*#__PURE__*/React.createElement("div", {
       className: "text-xs mt-0.5",
       style: {
-        color: "#5C6773"
+        color: "var(--faint)"
       }
     }, "last: ", lastVal != null ? `${lastVal}${m.unit}` : "—")), /*#__PURE__*/React.createElement("input", {
       inputMode: "decimal",
@@ -5642,19 +5696,19 @@ function CheckIn({
       className: "px-3 py-2 text-lg font-bold outline-none",
       style: {
         width: 110,
-        backgroundColor: "#0B0F14",
-        color: "#fff",
+        backgroundColor: "var(--bg)",
+        color: "var(--text)",
         borderRadius: 5,
-        border: "1px solid #212B36",
+        border: "1px solid var(--border)",
         textAlign: "center"
       }
     }));
   })))), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-4 px-4 py-3",
     style: {
-      backgroundColor: "#101822",
+      backgroundColor: "var(--panel)",
       borderRadius: 6,
-      color: "#9AA6B2",
+      color: "var(--muted)",
       borderLeft: `3px solid ${BLUE}`,
       lineHeight: 1.5
     }
@@ -5669,10 +5723,10 @@ function CheckIn({
     onClick: onCancel,
     className: "px-5 py-3 text-base font-extrabold uppercase tracking-wider active:scale-95 transition-transform",
     style: {
-      color: "#9AA6B2",
-      backgroundColor: "#141A22",
+      color: "var(--muted)",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, cancelText), /*#__PURE__*/React.createElement("button", {
     onClick: save,
@@ -5726,12 +5780,12 @@ function GymManager({
   }, /*#__PURE__*/React.createElement(SectionTitle, null, "Your Gyms"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mb-4",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, "Save the equipment at each place you train. ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#C5CDD6",
+      color: "var(--text2)",
       fontWeight: 700
     }
   }, "Tap the equipment chips to add or remove what's available"), " \u2014 edit any gym anytime. Green = you have it."), /*#__PURE__*/React.createElement("div", {
@@ -5742,9 +5796,9 @@ function GymManager({
       key: g.id,
       className: "px-4 py-4",
       style: {
-        backgroundColor: "#141A22",
+        backgroundColor: "var(--card)",
         borderRadius: 6,
-        border: `1px solid ${active ? BLUE : "#212B36"}`
+        border: `1px solid ${active ? BLUE : "var(--border)"}`
       }
     }, /*#__PURE__*/React.createElement("div", {
       className: "flex items-center gap-2 mb-3"
@@ -5753,10 +5807,10 @@ function GymManager({
       onChange: e => rename(g.id, e.target.value),
       className: "flex-1 px-3 py-2 text-lg font-bold outline-none",
       style: {
-        backgroundColor: "#0B0F14",
-        color: "#fff",
+        backgroundColor: "var(--bg)",
+        color: "var(--text)",
         borderRadius: 5,
-        border: "1px solid #212B36",
+        border: "1px solid var(--border)",
         fontFamily: FONT_HEAD
       }
     }), active ? /*#__PURE__*/React.createElement("span", {
@@ -5771,14 +5825,14 @@ function GymManager({
       className: "px-3 py-2 text-xs font-bold uppercase tracking-wider active:opacity-70",
       style: {
         color: BLUE,
-        backgroundColor: "#0B0F14",
+        backgroundColor: "var(--bg)",
         borderRadius: 5,
-        border: "1px solid #212B36"
+        border: "1px solid var(--border)"
       }
     }, "Set active")), /*#__PURE__*/React.createElement("div", {
       className: "text-xs uppercase font-bold tracking-widest mb-2",
       style: {
-        color: "#7C8794"
+        color: "var(--muted2)"
       }
     }, "Equipment \xB7 tap to toggle"), /*#__PURE__*/React.createElement("div", {
       className: "flex flex-wrap gap-2"
@@ -5790,8 +5844,8 @@ function GymManager({
         className: "px-3 py-1.5 text-xs font-bold uppercase tracking-wide active:scale-95 transition-transform",
         style: {
           borderRadius: 999,
-          color: on ? "#04120A" : "#9AA6B2",
-          backgroundColor: on ? "#22C55E" : "#0B0F14",
+          color: on ? "#04120A" : "var(--muted)",
+          backgroundColor: on ? "#22C55E" : "var(--bg)",
           border: on ? "1px solid #22C55E" : "1px dashed #3A4550"
         }
       }, on ? "✓ " : "+ ", cat.label);
@@ -5806,7 +5860,7 @@ function GymManager({
     onClick: addGym,
     className: "w-full mt-4 py-3 text-base font-extrabold uppercase tracking-wider active:scale-95 transition-transform",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       backgroundColor: "transparent",
       border: `1.5px dashed ${BLUE}`,
       borderRadius: 6
@@ -5830,14 +5884,14 @@ function NumberRow({
   return /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between px-4 py-3",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-base font-bold",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, label), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-2"
@@ -5852,16 +5906,16 @@ function NumberRow({
     className: "px-3 py-2 text-lg font-bold outline-none",
     style: {
       width: 96,
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 5,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "center"
     }
   }), unit && /*#__PURE__*/React.createElement("span", {
     className: "text-sm",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       width: 26
     }
   }, unit)));
@@ -5874,14 +5928,14 @@ function DateRow({
   return /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between px-4 py-3",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-base font-bold",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, label), /*#__PURE__*/React.createElement("input", {
     type: "date",
@@ -5889,10 +5943,10 @@ function DateRow({
     onChange: e => onCommit(e.target.value),
     className: "px-3 py-2 text-base font-bold outline-none",
     style: {
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 5,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }));
 }
@@ -5905,21 +5959,21 @@ function ToggleRow({
     onClick: onToggle,
     className: "w-full flex items-center justify-between px-4 py-3 active:opacity-80",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-base font-bold",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, label), /*#__PURE__*/React.createElement("span", {
     style: {
       width: 46,
       height: 26,
       borderRadius: 999,
-      backgroundColor: on ? BLUE : "#2E3A47",
+      backgroundColor: on ? BLUE : "var(--toggleoff)",
       position: "relative",
       transition: "background .15s"
     }
@@ -5931,7 +5985,7 @@ function ToggleRow({
       width: 20,
       height: 20,
       borderRadius: 999,
-      backgroundColor: "#fff",
+      backgroundColor: "var(--text)",
       transition: "left .15s"
     }
   })));
@@ -5947,7 +6001,7 @@ function SegRow({
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-sm font-bold mb-1.5",
     style: {
-      color: "#C5CDD6"
+      color: "var(--text2)"
     }
   }, label), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-wrap gap-1.5"
@@ -5959,9 +6013,9 @@ function SegRow({
       className: "px-3 py-2 text-sm font-bold active:scale-95 transition-transform",
       style: {
         borderRadius: 6,
-        color: on ? "#04120A" : "#C5CDD6",
-        backgroundColor: on ? BLUE : "#0B0F14",
-        border: `1px solid ${on ? BLUE : "#212B36"}`
+        color: on ? "#04120A" : "var(--text2)",
+        backgroundColor: on ? BLUE : "var(--bg)",
+        border: `1px solid ${on ? BLUE : "var(--border)"}`
       }
     }, o);
   })));
@@ -6000,20 +6054,20 @@ function PlanSettings({
   }, /*#__PURE__*/React.createElement(SectionTitle, null, "Your Plan"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mb-4",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, "Adjust anything here \u2014 your pace, goal chart, schedule, and the Home banner all recalculate automatically. Changes save instantly."), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between px-4 py-3 mb-6",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-base font-bold",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, "Plan name"), /*#__PURE__*/React.createElement("input", {
     value: s.planName,
@@ -6021,10 +6075,10 @@ function PlanSettings({
     className: "px-3 py-2 text-base font-bold outline-none",
     style: {
       width: 170,
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 5,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "right"
     }
   })), /*#__PURE__*/React.createElement("div", {
@@ -6070,15 +6124,15 @@ function PlanSettings({
   })), /*#__PURE__*/React.createElement("div", {
     className: "mt-2 px-4 py-3 text-sm",
     style: {
-      backgroundColor: "#101822",
+      backgroundColor: "var(--panel)",
       borderRadius: 6,
       borderLeft: `3px solid ${BLUE}`,
-      color: "#9AA6B2",
+      color: "var(--muted)",
       lineHeight: 1.5
     }
   }, totalLoss > 0 ? /*#__PURE__*/React.createElement("span", null, "That's ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontWeight: 700
     }
   }, totalLoss, " lb over ", weeks, " weeks"), " \u2014 about ", /*#__PURE__*/React.createElement("span", {
@@ -6090,15 +6144,15 @@ function PlanSettings({
     onClick: () => onLogScan && onLogScan(),
     className: "w-full mt-3 py-3 text-sm font-bold uppercase tracking-wider active:opacity-80",
     style: {
-      color: "#fff",
-      backgroundColor: "#141A22",
+      color: "var(--text)",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, "\uD83D\uDCCF Log your body scan"), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-1",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, "First time? Enter your current scale stats so calories, protein, and progress are tailored to you \u2014 not placeholder data."), /*#__PURE__*/React.createElement("button", {
@@ -6112,45 +6166,45 @@ function PlanSettings({
   }, "\u2728 Generate my plan"), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-2 mb-4",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, "Goal, days, and experience shape the ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#C5CDD6",
+      color: "var(--text2)",
       fontWeight: 700
     }
   }, "workouts"), "; your body scan & dates tailor ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#C5CDD6",
+      color: "var(--text2)",
       fontWeight: 700
     }
   }, "nutrition and progress"), ". Generating builds a full split and drops it into the Split editor to review \u2014 your logged history stays."), /*#__PURE__*/React.createElement("button", {
     onClick: () => onCalibrate && onCalibrate(),
     className: "w-full mt-1 py-3 text-sm font-bold uppercase tracking-wider active:opacity-80",
     style: {
-      color: "#fff",
-      backgroundColor: "#101722",
+      color: "var(--text)",
+      backgroundColor: "var(--panel)",
       borderRadius: 6,
       border: `1px solid ${BLUE}`
     }
   }, "\uD83C\uDFCB\uFE0F ", calibrated ? "Re-test my starting weights" : "Dial in my weights (quick strength test)"), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-1 mb-6",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, calibrated ? "Your suggested weights are calibrated to your test. Re-test anytime you've gotten noticeably stronger." : "Optional but recommended: a 4-lift test (about 5 min) so every suggested weight fits you instead of using generic beginner numbers."), /*#__PURE__*/React.createElement("div", {
     className: "text-xs uppercase font-bold tracking-widest mb-2",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "Daily targets \xB7 auto"), /*#__PURE__*/React.createElement("div", {
     className: "mb-5 px-4 py-4",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex gap-2"
@@ -6166,7 +6220,7 @@ function PlanSettings({
   }, nutrition[m.key]), /*#__PURE__*/React.createElement("div", {
     className: "text-xs uppercase font-semibold tracking-wider mt-1",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, m.label)))), /*#__PURE__*/React.createElement("div", {
     className: "text-center text-sm mt-3",
@@ -6177,18 +6231,38 @@ function PlanSettings({
   }, "\uD83D\uDCA7 ", nutrition.water, " oz water / day"), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-2",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, "Auto-set from your ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#C5CDD6",
+      color: "var(--text2)",
       fontWeight: 700
     }
   }, s.goalType), " goal (\u2248", nutrition.maintenance, " kcal maintenance ", settings.goalType === "Muscle" || settings.goalType === "Strength" ? "＋ a surplus" : "− a deficit", "). Everything recalculates each week from your latest check-in weight. Log it all in the Nutrition tab.")), /*#__PURE__*/React.createElement("div", {
     className: "text-xs uppercase font-bold tracking-widest mb-2",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
+    }
+  }, "Appearance"), /*#__PURE__*/React.createElement(SegRow, {
+    label: "Theme",
+    options: ["Light", "Dark", "Auto"],
+    value: {
+      light: "Light",
+      dark: "Dark",
+      auto: "Auto"
+    }[s.theme || "dark"],
+    onPick: v => set("theme", v.toLowerCase())
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs mb-5",
+    style: {
+      color: "var(--muted2)",
+      lineHeight: 1.5
+    }
+  }, (s.theme || "dark") === "auto" ? "Auto follows the clock — light during the day, dark from 7pm to 7am." : "Pick a look, or choose Auto to switch automatically with the time of day."), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs uppercase font-bold tracking-widest mb-2",
+    style: {
+      color: "var(--muted)"
     }
   }, "Rest timer"), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-2"
@@ -6224,7 +6298,7 @@ function StrengthTest({
       position: "fixed",
       inset: 0,
       zIndex: 70,
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       overflowY: "auto",
       paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)",
       paddingBottom: "calc(env(safe-area-inset-bottom) + 6rem)"
@@ -6236,19 +6310,19 @@ function StrengthTest({
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-2xl font-extrabold",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, "Strength check"), /*#__PURE__*/React.createElement("button", {
     onClick: onClose,
     className: "text-sm font-bold active:opacity-60",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "Close")), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mb-3",
     style: {
-      color: "#8A97A4",
+      color: "var(--muted)",
       lineHeight: 1.5
     }
   }, "Do one working set of each lift, then log the weight and reps. The app turns these into tailored starting weights for every exercise in your plan \u2014 no more generic numbers."), /*#__PURE__*/React.createElement("div", {
@@ -6266,20 +6340,20 @@ function StrengthTest({
     key: l.key,
     className: "px-4 py-3",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 8,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-lg font-bold",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, l.name), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mb-2",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, l.pattern, " \xB7 ", l.hint), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-2"
@@ -6288,7 +6362,7 @@ function StrengthTest({
   }, /*#__PURE__*/React.createElement("label", {
     className: "text-xs",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "Weight (lb)"), /*#__PURE__*/React.createElement("input", {
     inputMode: "decimal",
@@ -6297,10 +6371,10 @@ function StrengthTest({
     placeholder: "\u2014",
     className: "w-full px-3 py-2 text-base font-bold outline-none mt-1",
     style: {
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 5,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "center"
     }
   })), /*#__PURE__*/React.createElement("div", {
@@ -6308,7 +6382,7 @@ function StrengthTest({
   }, /*#__PURE__*/React.createElement("label", {
     className: "text-xs",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "Reps done"), /*#__PURE__*/React.createElement("input", {
     inputMode: "numeric",
@@ -6317,16 +6391,16 @@ function StrengthTest({
     placeholder: "\u2014",
     className: "w-full px-3 py-2 text-base font-bold outline-none mt-1",
     style: {
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 5,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "center"
     }
   })))))), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-3",
     style: {
-      color: "#5C6773",
+      color: "var(--faint)",
       lineHeight: 1.5
     }
   }, "Don't have a lift's exact machine? Skip it \u2014 the app fills that pattern with safe beginner defaults and dials it in from your logged sets.")), /*#__PURE__*/React.createElement("div", {
@@ -6336,16 +6410,16 @@ function StrengthTest({
       right: 0,
       bottom: 0,
       padding: "0.75rem 1rem calc(env(safe-area-inset-bottom) + 0.75rem)",
-      backgroundColor: "#0B0F14",
-      borderTop: "1px solid #1A222B"
+      backgroundColor: "var(--bg)",
+      borderTop: "1px solid var(--border2)"
     }
   }, /*#__PURE__*/React.createElement("button", {
     disabled: !entered.length,
     onClick: () => onApply(data),
     className: "w-full py-3 text-base font-extrabold uppercase tracking-widest active:scale-95 transition-transform",
     style: {
-      color: entered.length ? "#04120A" : "#5C6773",
-      backgroundColor: entered.length ? MINT : "#1A222B",
+      color: entered.length ? "#04120A" : "var(--faint)",
+      backgroundColor: entered.length ? MINT : "var(--border2)",
       borderRadius: 6
     }
   }, entered.length ? `Set my weights (${entered.length}/4 lifts)` : "Enter at least one lift")));
@@ -6444,31 +6518,31 @@ function PlanEditor({
   }, /*#__PURE__*/React.createElement(SectionTitle, null, "Your Split"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mb-4",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       lineHeight: 1.5
     }
   }, "Edit your current plan anytime \u2014 no need to regenerate. Rename days, move them to different weekdays, or swap exercises. Short on time for a stretch? ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#9AA6B2",
+      color: "var(--muted)",
       fontWeight: 700
     }
   }, "Pause"), " a day to drop it without deleting it \u2014 resume it later and it comes back exactly as it was. Your history, PRs, and streak are never affected."), /*#__PURE__*/React.createElement("div", {
     className: "px-4 py-4 mb-5",
     style: {
-      backgroundColor: "#101722",
+      backgroundColor: "var(--panel)",
       borderRadius: 8,
       border: "1px solid #1E3A5F"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-sm font-extrabold uppercase tracking-wider mb-1",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, "How many days can you train?"), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mb-3",
     style: {
-      color: "#8A97A4",
+      color: "var(--muted)",
       lineHeight: 1.5
     }
   }, "Schedule change? Pick your days and the app rebuilds the best split for you automatically \u2014 no guessing which day to drop. Keeps your goal, exercise preferences, and all your history."), /*#__PURE__*/React.createElement("div", {
@@ -6479,15 +6553,15 @@ function PlanEditor({
     className: "flex-1 py-2.5 text-base font-extrabold active:scale-95 transition-transform",
     style: {
       borderRadius: 6,
-      color: n === activeCount ? "#04121F" : "#B7C2CE",
-      backgroundColor: n === activeCount ? BLUE : "#0B0F14",
-      border: n === activeCount ? `1px solid ${BLUE}` : "1px solid #212B36",
+      color: n === activeCount ? "#04121F" : "var(--text2)",
+      backgroundColor: n === activeCount ? BLUE : "var(--bg)",
+      border: n === activeCount ? `1px solid ${BLUE}` : "1px solid var(--border)",
       fontFamily: FONT_HEAD
     }
   }, n))), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-2 text-center",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "days per week")), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-4"
@@ -6495,15 +6569,15 @@ function PlanEditor({
     key: d.id,
     className: "px-4 py-4",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: d.paused ? "1px solid #4A3B1E" : "1px solid #212B36",
+      border: d.paused ? "1px solid #4A3B1E" : "1px solid var(--border)",
       opacity: d.paused ? 0.62 : 1
     }
   }, d.paused && /*#__PURE__*/React.createElement("div", {
     className: "mb-2 inline-block text-xs font-extrabold uppercase tracking-wider px-2 py-0.5",
     style: {
-      color: "#0B0F14",
+      color: "var(--bg)",
       backgroundColor: "#E0A63F",
       borderRadius: 4
     }
@@ -6514,10 +6588,10 @@ function PlanEditor({
     onChange: e => renameDay(d.id, e.target.value),
     className: "flex-1 min-w-0 px-3 py-2 text-lg font-bold outline-none",
     style: {
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 5,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       fontFamily: FONT_HEAD
     }
   }), /*#__PURE__*/React.createElement("select", {
@@ -6525,10 +6599,10 @@ function PlanEditor({
     onChange: e => setWeekday(d.id, parseInt(e.target.value, 10)),
     className: "px-2 py-2 text-sm font-bold outline-none",
     style: {
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 5,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, [1, 2, 3, 4, 5, 6].map(wd => /*#__PURE__*/React.createElement("option", {
     key: wd,
@@ -6543,7 +6617,7 @@ function PlanEditor({
       width: 40,
       height: 22,
       borderRadius: 999,
-      backgroundColor: d.kind === "cardio" ? MUSCLE_COLORS.Cardio : "#2E3A47",
+      backgroundColor: d.kind === "cardio" ? MUSCLE_COLORS.Cardio : "var(--toggleoff)",
       position: "relative"
     }
   }, /*#__PURE__*/React.createElement("span", {
@@ -6554,27 +6628,27 @@ function PlanEditor({
       width: 16,
       height: 16,
       borderRadius: 999,
-      backgroundColor: "#fff"
+      backgroundColor: "var(--text)"
     }
   })), /*#__PURE__*/React.createElement("span", {
     className: "text-xs font-bold uppercase tracking-wide",
     style: {
-      color: "#9AA6B2"
+      color: "var(--muted)"
     }
   }, "Conditioning day"))), d.exercises.map((ex, exI) => /*#__PURE__*/React.createElement("div", {
     key: exI,
     className: "mb-2 px-3 py-2",
     style: {
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       borderRadius: 5,
-      border: "1px solid #1A222B"
+      border: "1px solid var(--border2)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between mb-1.5"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-sm font-bold",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, ex.name), /*#__PURE__*/React.createElement("button", {
     onClick: () => removeEx(d.id, exI),
@@ -6587,7 +6661,7 @@ function PlanEditor({
   }, /*#__PURE__*/React.createElement("label", {
     className: "text-xs",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "Sets"), /*#__PURE__*/React.createElement("input", {
     value: ex.sets,
@@ -6596,32 +6670,32 @@ function PlanEditor({
     className: "px-2 py-1 text-sm font-bold outline-none",
     style: {
       width: 44,
-      backgroundColor: "#141A22",
-      color: "#fff",
+      backgroundColor: "var(--card)",
+      color: "var(--text)",
       borderRadius: 4,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "center"
     }
   }), /*#__PURE__*/React.createElement("label", {
     className: "text-xs",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "Reps"), /*#__PURE__*/React.createElement("input", {
     value: ex.reps,
     onChange: e => setExField(d.id, exI, "reps", e.target.value),
     className: "flex-1 min-w-0 px-2 py-1 text-sm font-bold outline-none",
     style: {
-      backgroundColor: "#141A22",
-      color: "#fff",
+      backgroundColor: "var(--card)",
+      color: "var(--text)",
       borderRadius: 4,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "center"
     }
   }), /*#__PURE__*/React.createElement("label", {
     className: "text-xs",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "Rest"), /*#__PURE__*/React.createElement("input", {
     value: ex.rest,
@@ -6629,10 +6703,10 @@ function PlanEditor({
     className: "px-2 py-1 text-sm font-bold outline-none",
     style: {
       width: 54,
-      backgroundColor: "#141A22",
-      color: "#fff",
+      backgroundColor: "var(--card)",
+      color: "var(--text)",
       borderRadius: 4,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "center"
     }
   })))), /*#__PURE__*/React.createElement("button", {
@@ -6646,9 +6720,9 @@ function PlanEditor({
   }, "+ Add exercise"), pickerDay === d.id && /*#__PURE__*/React.createElement("div", {
     className: "mt-2",
     style: {
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex gap-2 overflow-x-auto px-3 py-2",
@@ -6661,9 +6735,9 @@ function PlanEditor({
     className: "whitespace-nowrap px-3 py-1 text-xs uppercase font-bold tracking-wider",
     style: {
       borderRadius: 999,
-      color: pickerMuscle === m ? "#04120A" : "#9AA6B2",
-      backgroundColor: pickerMuscle === m ? BLUE : "#141A22",
-      border: "1px solid #212B36"
+      color: pickerMuscle === m ? "#04120A" : "var(--muted)",
+      backgroundColor: pickerMuscle === m ? BLUE : "var(--card)",
+      border: "1px solid var(--border)"
     }
   }, m))), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -6675,12 +6749,12 @@ function PlanEditor({
     onClick: () => addEx(d.id, lib),
     className: "w-full flex items-center justify-between px-4 py-2.5 active:opacity-70",
     style: {
-      borderTop: "1px solid #141A22"
+      borderTop: "1px solid var(--card)"
     }
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-sm font-semibold text-left",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, lib.name), /*#__PURE__*/React.createElement(MuscleTag, {
     muscle: lib.muscle,
@@ -6703,7 +6777,7 @@ function PlanEditor({
     onClick: addDay,
     className: "w-full mt-4 py-3 text-base font-extrabold uppercase tracking-wider active:scale-95 transition-transform",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       backgroundColor: "transparent",
       border: `1.5px dashed ${BLUE}`,
       borderRadius: 6
@@ -6712,15 +6786,15 @@ function PlanEditor({
     onClick: resetDefault,
     className: "w-full mt-2 py-3 text-sm font-bold uppercase tracking-wider active:opacity-70",
     style: {
-      color: "#9AA6B2",
-      backgroundColor: "#141A22",
+      color: "var(--muted)",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, "Reset to default split"), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-3",
     style: {
-      color: "#5C6773",
+      color: "var(--faint)",
       lineHeight: 1.5
     }
   }, "Changing which days exist resets this week's checkmarks (so the calendar stays accurate) \u2014 your logged history is never touched."));
@@ -6741,16 +6815,16 @@ function MacroLogRow({
   return /*#__PURE__*/React.createElement("div", {
     className: "px-4 py-3 mb-2",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between mb-2"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-base font-bold",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, macro.label), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-2"
@@ -6762,22 +6836,22 @@ function MacroLogRow({
     className: "px-2 py-1.5 text-base font-bold outline-none",
     style: {
       width: 70,
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 5,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "center"
     }
   }), /*#__PURE__*/React.createElement("span", {
     className: "text-sm",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       width: 62
     }
   }, "/ ", target, " ", macro.unit))), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 8,
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       borderRadius: 2,
       overflow: "hidden"
     }
@@ -6802,16 +6876,16 @@ function WaterRow({
   return /*#__PURE__*/React.createElement("div", {
     className: "px-4 py-3 mb-2",
     style: {
-      backgroundColor: "#141A22",
+      backgroundColor: "var(--card)",
       borderRadius: 6,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between mb-2"
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-base font-bold",
     style: {
-      color: "#fff"
+      color: "var(--text)"
     }
   }, "\uD83D\uDCA7 Water"), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-2"
@@ -6823,22 +6897,22 @@ function WaterRow({
     className: "px-2 py-1.5 text-base font-bold outline-none",
     style: {
       width: 70,
-      backgroundColor: "#0B0F14",
-      color: "#fff",
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
       borderRadius: 5,
-      border: "1px solid #212B36",
+      border: "1px solid var(--border)",
       textAlign: "center"
     }
   }), /*#__PURE__*/React.createElement("span", {
     className: "text-sm",
     style: {
-      color: "#7C8794",
+      color: "var(--muted2)",
       width: 62
     }
   }, "/ ", target, " oz"))), /*#__PURE__*/React.createElement("div", {
     style: {
       height: 8,
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       borderRadius: 2,
       overflow: "hidden"
     }
@@ -6858,7 +6932,7 @@ function WaterRow({
     style: {
       borderRadius: 5,
       color: "#00C2FF",
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       border: "1px solid #223"
     }
   }, "+ 8 oz"), /*#__PURE__*/React.createElement("button", {
@@ -6867,7 +6941,7 @@ function WaterRow({
     style: {
       borderRadius: 5,
       color: "#00C2FF",
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       border: "1px solid #223"
     }
   }, "+ 16 oz"), /*#__PURE__*/React.createElement("button", {
@@ -6875,7 +6949,7 @@ function WaterRow({
     className: "px-3 py-1.5 text-xs font-bold uppercase tracking-wide active:opacity-70",
     style: {
       borderRadius: 5,
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, "Reset")));
 }
@@ -6900,7 +6974,7 @@ function NutritionTracker({
   }, /*#__PURE__*/React.createElement(SectionTitle, null, "Nutrition"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mb-4",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, pretty, " \u2014 log your running totals for the day. Targets are auto-set from your goal."), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col"
@@ -6917,10 +6991,10 @@ function NutritionTracker({
   })), /*#__PURE__*/React.createElement("div", {
     className: "mt-3 px-4 py-3 text-xs",
     style: {
-      backgroundColor: "#101822",
+      backgroundColor: "var(--panel)",
       borderRadius: 6,
       borderLeft: `3px solid ${MINT}`,
-      color: "#9AA6B2",
+      color: "var(--muted)",
       lineHeight: 1.5
     }
   }, "Hit your ", /*#__PURE__*/React.createElement("span", {
@@ -6938,7 +7012,7 @@ function NutritionTracker({
   }, /*#__PURE__*/React.createElement(SectionTitle, null, "Recent Days"), history.length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "text-sm",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "Your logged days will show here with a \u2713 when you hit calories & protein.") : /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-2"
@@ -6949,19 +7023,19 @@ function NutritionTracker({
       key: d,
       className: "flex items-center justify-between px-4 py-3",
       style: {
-        backgroundColor: "#141A22",
+        backgroundColor: "var(--card)",
         borderRadius: 6,
-        border: "1px solid #212B36"
+        border: "1px solid var(--border)"
       }
     }, /*#__PURE__*/React.createElement("div", {
       className: "text-sm font-bold",
       style: {
-        color: "#fff"
+        color: "var(--text)"
       }
     }, d), /*#__PURE__*/React.createElement("div", {
       className: "flex items-center gap-3 text-xs",
       style: {
-        color: "#9AA6B2"
+        color: "var(--muted)"
       }
     }, /*#__PURE__*/React.createElement("span", null, e.calories || 0, " kcal"), /*#__PURE__*/React.createElement("span", {
       style: {
@@ -6969,7 +7043,7 @@ function NutritionTracker({
       }
     }, e.protein || 0, "g P"), /*#__PURE__*/React.createElement("span", {
       style: {
-        color: good ? "#22C55E" : "#5C6773",
+        color: good ? "#22C55E" : "var(--faint)",
         fontWeight: 900
       }
     }, good ? "✓" : "·")));
@@ -7146,7 +7220,7 @@ function Sidebar({
       width: 250,
       maxWidth: "80%",
       backgroundColor: "#0E141B",
-      borderRight: "1px solid #212B36",
+      borderRight: "1px solid var(--border)",
       zIndex: 61,
       transform: open ? "translateX(0)" : "translateX(-100%)",
       transition: "transform .22s ease",
@@ -7156,7 +7230,7 @@ function Sidebar({
   }, /*#__PURE__*/React.createElement("div", {
     className: "px-5 pt-6 pb-4 flex items-center justify-between",
     style: {
-      borderBottom: "1px solid #1A222B",
+      borderBottom: "1px solid var(--border2)",
       paddingTop: "calc(env(safe-area-inset-top) + 1.5rem)"
     }
   }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
@@ -7167,14 +7241,14 @@ function Sidebar({
   }, "Recomp Tracker"), /*#__PURE__*/React.createElement("div", {
     className: "text-2xl font-extrabold",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, "Menu")), /*#__PURE__*/React.createElement("button", {
     onClick: onClose,
     className: "text-2xl active:opacity-60",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "\u2715")), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col py-2"
@@ -7188,7 +7262,7 @@ function Sidebar({
       },
       className: "flex items-center gap-3 px-5 py-3 text-left active:opacity-70",
       style: {
-        color: active ? BLUE : "#C5CDD6",
+        color: active ? BLUE : "var(--text2)",
         backgroundColor: active ? "#131C26" : "transparent",
         borderLeft: `3px solid ${active ? BLUE : "transparent"}`
       }
@@ -7201,15 +7275,15 @@ function Sidebar({
       }
     }, /*#__PURE__*/React.createElement(NavIcon, {
       id: s.id,
-      color: active ? BLUE : "#9AA6B2"
+      color: active ? BLUE : "var(--muted)"
     })), /*#__PURE__*/React.createElement("span", {
       className: "text-base font-bold uppercase tracking-wide"
     }, s.label));
   })), /*#__PURE__*/React.createElement("div", {
     className: "mt-auto px-5 py-4 text-xs",
     style: {
-      color: "#5C6773",
-      borderTop: "1px solid #1A222B"
+      color: "var(--faint)",
+      borderTop: "1px solid var(--border2)"
     }
   }, "Room for more sections here as the app grows.")));
 }
@@ -7243,7 +7317,7 @@ function Onboarding({
       position: "fixed",
       inset: 0,
       zIndex: 80,
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       overflowY: "auto",
       paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)",
       paddingBottom: "calc(env(safe-area-inset-bottom) + 2rem)"
@@ -7262,13 +7336,13 @@ function Onboarding({
   }, "Welcome"), /*#__PURE__*/React.createElement("div", {
     className: "text-4xl font-extrabold leading-tight",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, "Let's build your training plan."), /*#__PURE__*/React.createElement("div", {
     className: "text-base mt-3",
     style: {
-      color: "#9AA6B2",
+      color: "var(--muted)",
       lineHeight: 1.55
     }
   }, "Answer a couple of quick questions and the app builds a full weekly split tailored to your goal \u2014 then keeps adjusting it as you train."), /*#__PURE__*/React.createElement("div", {
@@ -7284,7 +7358,7 @@ function Onboarding({
   }, e), /*#__PURE__*/React.createElement("span", {
     className: "text-sm",
     style: {
-      color: "#C5CDD6",
+      color: "var(--text2)",
       lineHeight: 1.45
     }
   }, t)))), /*#__PURE__*/React.createElement("div", {
@@ -7311,7 +7385,7 @@ function Onboarding({
   }, "Step 1 of 2 \xB7 Your goal"), /*#__PURE__*/React.createElement("div", {
     className: "text-3xl font-extrabold leading-tight mt-1 mb-4",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, "What are you training for?"), /*#__PURE__*/React.createElement(SegRow, {
@@ -7352,10 +7426,10 @@ function Onboarding({
   })), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mt-3 px-4 py-3",
     style: {
-      backgroundColor: "#101822",
+      backgroundColor: "var(--panel)",
       borderRadius: 6,
       borderLeft: `3px solid ${BLUE}`,
-      color: "#9AA6B2",
+      color: "var(--muted)",
       lineHeight: 1.5
     }
   }, "Goal, days, and experience shape your workouts. Weight and dates set your pace and nutrition targets \u2014 you can change any of it later in the Plan tab."), /*#__PURE__*/React.createElement("div", {
@@ -7364,10 +7438,10 @@ function Onboarding({
     onClick: () => setStep(0),
     className: "px-5 py-4 text-base font-extrabold uppercase tracking-wider active:scale-95 transition-transform",
     style: {
-      color: "#9AA6B2",
-      backgroundColor: "#141A22",
+      color: "var(--muted)",
+      backgroundColor: "var(--card)",
       borderRadius: 8,
-      border: "1px solid #212B36"
+      border: "1px solid var(--border)"
     }
   }, "Back"), /*#__PURE__*/React.createElement("button", {
     onClick: () => setStep(2),
@@ -7399,6 +7473,11 @@ function App() {
   const [detailLog, setDetailLog] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showTest, setShowTest] = useState(false); // strength calibration overlay
+  const [nowHour, setNowHour] = useState(() => new Date().getHours()); // for "auto" theme (day/night)
+  useEffect(() => {
+    const id = setInterval(() => setNowHour(new Date().getHours()), 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
   // Load saved progress on startup (falls back to empty on first run)
   const [perf, setPerf] = useState(() => loadStore()?.perf || {}); // exercise name -> { load, dir, from }
   const [logs, setLogs] = useState(() => loadStore()?.logs || []); // completed sessions, newest first
@@ -7836,20 +7915,26 @@ function App() {
       setTimeout(() => setToast(""), 1200);
     }
   };
+  const activeTheme = resolveTheme(settings.theme || "dark", nowHour);
+  const pal = activeTheme === "light" ? LIGHT_PAL : DARK_PAL;
+  useEffect(() => {
+    if (typeof document !== "undefined") document.body.style.backgroundColor = pal.bg;
+  }, [pal.bg]);
   return /*#__PURE__*/React.createElement("div", {
     onTouchStart: onTouchStart,
     onTouchEnd: onTouchEnd,
     style: {
-      backgroundColor: "#0B0F14",
+      ...themeVarsFor(pal),
+      backgroundColor: "var(--bg)",
       minHeight: "100vh",
       fontFamily: FONT_BODY,
-      color: "#fff",
+      color: "var(--text)",
       paddingTop: "env(safe-area-inset-top)"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "px-4 pt-4 pb-4",
     style: {
-      background: "linear-gradient(160deg,#101822,#0B0F14)"
+      background: "linear-gradient(160deg,var(--panel),var(--bg))"
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-3 mb-4"
@@ -7858,7 +7943,7 @@ function App() {
     "aria-label": "Open menu",
     className: "active:opacity-60",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       lineHeight: 1
     }
   }, /*#__PURE__*/React.createElement("span", {
@@ -7868,7 +7953,7 @@ function App() {
   }, "\u2630")), /*#__PURE__*/React.createElement("span", {
     className: "text-lg font-extrabold uppercase tracking-wide",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, sectionLabel(tab))), /*#__PURE__*/React.createElement("div", {
@@ -7883,7 +7968,7 @@ function App() {
   }, "Recomp \xB7 ", bMonths, "-Month Plan"), /*#__PURE__*/React.createElement("div", {
     className: "text-3xl font-extrabold leading-none mt-1 truncate",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, (settings.planName || "My Training").toUpperCase())), /*#__PURE__*/React.createElement("div", {
@@ -7893,13 +7978,13 @@ function App() {
   }, /*#__PURE__*/React.createElement("span", {
     className: "text-2xl font-extrabold",
     style: {
-      color: "#fff",
+      color: "var(--text)",
       fontFamily: FONT_HEAD
     }
   }, settings.startWeight), /*#__PURE__*/React.createElement("span", {
     className: "text-sm",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, "\u2192"), /*#__PURE__*/React.createElement("span", {
     className: "text-2xl font-extrabold",
@@ -7910,19 +7995,19 @@ function App() {
   }, settings.goalWeight), /*#__PURE__*/React.createElement("span", {
     className: "text-xs",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, "lb")), /*#__PURE__*/React.createElement("div", {
     className: "text-xs",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, lbToGoal > 0 ? `${lbToGoal} lb to goal` : "at / past goal", " \xB7 \u2248", bPace, " lb/wk"))), /*#__PURE__*/React.createElement("div", {
     className: "mt-3"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       height: 6,
-      backgroundColor: "#0B0F14",
+      backgroundColor: "var(--bg)",
       borderRadius: 3,
       overflow: "hidden"
     }
@@ -7937,7 +8022,7 @@ function App() {
   })), /*#__PURE__*/React.createElement("div", {
     className: "flex justify-between mt-1 text-xs",
     style: {
-      color: "#5C6773"
+      color: "var(--faint)"
     }
   }, /*#__PURE__*/React.createElement("span", null, isPlanStarted(settings.startDate) ? `Started ${fmtDate(settings.startDate, {
     month: "short",
@@ -7948,16 +8033,16 @@ function App() {
   })}`), /*#__PURE__*/React.createElement("span", null, "Target ", fmtDate(settings.targetDate)))), /*#__PURE__*/React.createElement("div", {
     className: "mt-2 text-xs",
     style: {
-      color: "#7C8794"
+      color: "var(--muted2)"
     }
   }, "Daily target: ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#C5CDD6",
+      color: "var(--text2)",
       fontWeight: 700
     }
   }, "~", nutrition.calories, " kcal"), " \xB7 ", /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#C5CDD6",
+      color: "var(--text2)",
       fontWeight: 700
     }
   }, nutrition.protein, "g protein"))), tab === "dashboard" && /*#__PURE__*/React.createElement(Dashboard, {
