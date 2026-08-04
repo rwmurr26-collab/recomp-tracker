@@ -2242,7 +2242,6 @@ function figShapes(ex, t) {
   });
   return out;
 }
-// <<<FIGURE_ENGINE_END>>>
 
 // <<<FIGURE_DATA_START>>>
 // ---- Per-exercise poses. start -> end -> back again (looping animation). ----
@@ -4064,7 +4063,6 @@ const EXERCISE_FIG = {
     dur: 800
   }
 };
-// <<<FIGURE_DATA_END>>>
 
 // ---- How-to instructions + form cues for every movement ----
 const EXERCISE_GUIDE = {
@@ -7832,7 +7830,12 @@ function ExerciseFigure({
     border: "1px solid " + (on ? accent : "var(--border)")
   });
   return /*#__PURE__*/React.createElement("div", {
-    className: "mt-4"
+    className: "mt-4",
+    style: {
+      maxWidth: 430,
+      marginLeft: "auto",
+      marginRight: "auto"
+    }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       position: "relative",
