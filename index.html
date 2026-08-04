@@ -7792,7 +7792,53 @@ function App() {
   const bSpan = settings.startWeight - settings.goalWeight;
   const bProgress = bSpan > 0 ? Math.max(0, Math.min(100, (settings.startWeight - curWeight) / bSpan * 100)) : 0;
   const nutrition = computeNutrition(settings, checkins);
+
+  // Swipe left anywhere → jump back to the Home dashboard
+  const swipeRef = useRef(null);
+  const inHScroller = node => {
+    let el = node;
+    while (el && el !== document.body) {
+      try {
+        const st = window.getComputedStyle(el);
+        if ((st.overflowX === "auto" || st.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 4) return true;
+      } catch (e) {/* ignore */}
+      el = el.parentElement;
+    }
+    return false;
+  };
+  const onTouchStart = e => {
+    if (e.touches && e.touches.length === 1) {
+      const t = e.touches[0];
+      swipeRef.current = {
+        x: t.clientX,
+        y: t.clientY,
+        t: Date.now(),
+        target: e.target
+      };
+    } else swipeRef.current = null;
+  };
+  const onTouchEnd = e => {
+    const s = swipeRef.current;
+    swipeRef.current = null;
+    if (!s) return;
+    if (menuOpen || guide || detailLog || showTest || !onboarded) return; // don't fight open overlays
+    if (tab === "dashboard") return; // already home
+    if (inHScroller(s.target)) return; // let carousels/filters scroll freely
+    const ch = e.changedTouches && e.changedTouches[0];
+    if (!ch) return;
+    const dx = ch.clientX - s.x,
+      dy = ch.clientY - s.y,
+      dt = Date.now() - s.t;
+    if (dx < -80 && Math.abs(dx) > Math.abs(dy) * 1.8 && dt < 800) {
+      // clear, fast leftward swipe
+      setTab("dashboard");
+      setToast("🏠 Home");
+      setTimeout(() => setToast(""), 1200);
+    }
+  };
   return /*#__PURE__*/React.createElement("div", {
+    onTouchStart: onTouchStart,
+    onTouchEnd: onTouchEnd,
     style: {
       backgroundColor: "#0B0F14",
       minHeight: "100vh",
