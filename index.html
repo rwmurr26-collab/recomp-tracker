@@ -1612,6 +1612,2460 @@ function migrateGyms(gyms) {
 const CATALOG = [...EXERCISE_LIBRARY, ...CONDITIONING];
 const MUSCLE_ORDER = ["Chest", "Back", "Shoulders", "Biceps", "Triceps", "Quads", "Hamstrings", "Glutes", "Calves", "Core", "Cardio"];
 
+// <<<FIGURE_ENGINE_START>>>
+// ---- Animated exercise diagrams (pure-JS pose math -> SVG shape list) ----
+// Side view faces right. Angles: 0 = up, 90 = right, 180 = down, 270 = left.
+const FIGV = {
+  w: 220,
+  h: 168,
+  floor: 152
+};
+const SEG = {
+  torso: 34,
+  neck: 7,
+  head: 8.5,
+  uarm: 18,
+  farm: 18,
+  thigh: 24,
+  shin: 24,
+  foot: 11
+};
+const _D2R = Math.PI / 180;
+function fpt(o, deg, len) {
+  return [o[0] + Math.sin(deg * _D2R) * len, o[1] - Math.cos(deg * _D2R) * len];
+}
+// two-link inverse kinematics: returns [upperAngle, lowerAngle] reaching `target`
+function fik(origin, target, l1, l2, bend) {
+  let dx = target[0] - origin[0],
+    dy = target[1] - origin[1];
+  let d = Math.sqrt(dx * dx + dy * dy);
+  const max = l1 + l2 - 0.01,
+    min = Math.abs(l1 - l2) + 0.01;
+  if (d > max) {
+    dx *= max / d;
+    dy *= max / d;
+    d = max;
+  }
+  if (d < min) {
+    if (d < 0.01) {
+      dx = 0;
+      dy = min;
+      d = min;
+    } else {
+      dx *= min / d;
+      dy *= min / d;
+      d = min;
+    }
+  }
+  const base = Math.atan2(dx, -dy);
+  const cosA = (d * d + l1 * l1 - l2 * l2) / (2 * d * l1);
+  const a = Math.acos(Math.max(-1, Math.min(1, cosA)));
+  const a1 = base + (bend || 1) * a;
+  const ex = origin[0] + Math.sin(a1) * l1,
+    ey = origin[1] - Math.cos(a1) * l1;
+  const tx = origin[0] + dx,
+    ty = origin[1] + dy;
+  const a2r = Math.atan2(tx - ex, -(ty - ey));
+  return [a1 / _D2R, a2r / _D2R];
+}
+function _leg3(l) {
+  return l.length > 2 ? [l[0], l[1], l[2]] : [l[0], l[1], 90];
+}
+// resolve a pose: fill defaults and convert IK targets into joint angles
+function fnorm(p, front) {
+  const hip = p.hip,
+    torso = p.torso || 0;
+  const sh = fpt(hip, torso, SEG.torso);
+  const far = p.far || (front ? [-15, 0] : [-6, 1]);
+  let arm = p.arm,
+    arm2 = p.arm2;
+  if (p.armTo) arm = fik(sh, p.armTo, SEG.uarm, SEG.farm, p.armBend === undefined ? -1 : p.armBend);
+  if (p.armTo2) arm2 = fik([sh[0] + far[0], sh[1] + far[1]], p.armTo2, SEG.uarm, SEG.farm, p.armBend2 === undefined ? p.armBend === undefined ? -1 : p.armBend : p.armBend2);
+  if (!arm) arm = [180, 180];
+  if (!arm2) arm2 = arm;
+  let leg = p.leg,
+    leg2 = p.leg2,
+    footA = p.foot === undefined ? 90 : p.foot,
+    footA2 = p.foot2 === undefined ? footA : p.foot2;
+  if (p.legTo) {
+    const r = fik(hip, p.legTo, SEG.thigh, SEG.shin, p.legBend === undefined ? -1 : p.legBend);
+    leg = [r[0], r[1], footA];
+  }
+  if (p.legTo2) {
+    const r = fik([hip[0] + far[0], hip[1] + far[1]], p.legTo2, SEG.thigh, SEG.shin, p.legBend2 === undefined ? p.legBend === undefined ? -1 : p.legBend : p.legBend2);
+    leg2 = [r[0], r[1], footA2];
+  }
+  if (!leg) leg = [180, 180, footA];
+  leg = _leg3(leg);
+  if (!leg2) leg2 = leg;else {
+    leg2 = _leg3(leg2);
+    leg2[2] = footA2;
+  }
+  return {
+    hip: [hip[0], hip[1]],
+    torso: torso,
+    head: p.head || 0,
+    arm: [arm[0], arm[1]],
+    arm2: [arm2[0], arm2[1]],
+    leg: leg,
+    leg2: leg2,
+    far: far
+  };
+}
+function flerp(a, b, t) {
+  if (typeof a === "number") return a + (b - a) * t;
+  if (Array.isArray(a)) return a.map(function (v, i) {
+    return flerp(v, b[i] === undefined ? v : b[i], t);
+  });
+  if (a && typeof a === "object") {
+    const o = {};
+    for (const k in a) o[k] = flerp(a[k], b[k] === undefined ? a[k] : b[k], t);
+    return o;
+  }
+  return a;
+}
+function fjoints(p) {
+  const hip = p.hip,
+    t = p.torso;
+  const sh = fpt(hip, t, SEG.torso);
+  const hd = t + p.head;
+  const neck = fpt(sh, hd, SEG.neck);
+  const headC = fpt(sh, hd, SEG.neck + SEG.head);
+  const mkArm = function (a, o) {
+    const s = [sh[0] + o[0], sh[1] + o[1]];
+    const el = fpt(s, a[0], SEG.uarm);
+    return {
+      sh: s,
+      el: el,
+      wr: fpt(el, a[1], SEG.farm)
+    };
+  };
+  const mkLeg = function (l, o) {
+    const h = [hip[0] + o[0], hip[1] + o[1]];
+    const kn = fpt(h, l[0], SEG.thigh);
+    const an = fpt(kn, l[1], SEG.shin);
+    return {
+      hip: h,
+      kn: kn,
+      an: an,
+      toe: fpt(an, l[2], SEG.foot)
+    };
+  };
+  return {
+    hip: hip,
+    sh: sh,
+    neck: neck,
+    headC: headC,
+    aN: mkArm(p.arm, [0, 0]),
+    aF: mkArm(p.arm2, p.far),
+    lN: mkLeg(p.leg, [0, 0]),
+    lF: mkLeg(p.leg2, p.far)
+  };
+}
+function fjat(J, s) {
+  const far = s.length > 2 && s.charAt(s.length - 1) === "F";
+  const k = far ? s.slice(0, -1) : s;
+  const a = far ? J.aF : J.aN,
+    l = far ? J.lF : J.lN;
+  if (k === "wr") return a.wr;
+  if (k === "el") return a.el;
+  if (k === "sh") return a.sh;
+  if (k === "kn") return l.kn;
+  if (k === "an") return l.an;
+  if (k === "toe") return l.toe;
+  if (k === "head") return J.headC;
+  return J.hip;
+}
+const _FRONTPROPS = {
+  plate: 1,
+  db: 1,
+  handle: 1,
+  kb: 1,
+  barline: 1,
+  arc: 1
+};
+function _dumbbell(out, p, ang, s) {
+  s = s || 1;
+  const u = [Math.sin(ang * _D2R), -Math.cos(ang * _D2R)];
+  const a = [p[0] - u[0] * 7 * s, p[1] - u[1] * 7 * s],
+    b = [p[0] + u[0] * 7 * s, p[1] + u[1] * 7 * s];
+  out.push({
+    k: "line",
+    a: a,
+    b: b,
+    w: 3 * s,
+    col: "equip"
+  });
+  out.push({
+    k: "line",
+    a: [a[0] - u[0] * 2.5 * s, a[1] - u[1] * 2.5 * s],
+    b: [a[0] + u[0] * 1.5 * s, a[1] + u[1] * 1.5 * s],
+    w: 9 * s,
+    col: "equip",
+    cap: "butt"
+  });
+  out.push({
+    k: "line",
+    a: [b[0] - u[0] * 1.5 * s, b[1] - u[1] * 1.5 * s],
+    b: [b[0] + u[0] * 2.5 * s, b[1] + u[1] * 2.5 * s],
+    w: 9 * s,
+    col: "equip",
+    cap: "butt"
+  });
+}
+function fprop(pr, J, out) {
+  const F = FIGV.floor;
+  switch (pr.t) {
+    case "floor":
+      out.push({
+        k: "line",
+        a: [4, F],
+        b: [FIGV.w - 4, F],
+        w: 3,
+        col: "floor"
+      });
+      break;
+    case "bench":
+      {
+        const a = (pr.tilt || 0) * _D2R,
+          ux = Math.cos(a),
+          uy = -Math.sin(a);
+        const p0 = [pr.x, pr.y],
+          p1 = [pr.x + ux * pr.w, pr.y + uy * pr.w];
+        const th = pr.th || 7,
+          nx = -uy * th,
+          ny = ux * th;
+        out.push({
+          k: "poly",
+          pts: [p0, p1, [p1[0] + nx, p1[1] + ny], [p0[0] + nx, p0[1] + ny]],
+          w: 2,
+          col: "equip",
+          fill: "equipfill"
+        });
+        [0.14, 0.86].forEach(function (f) {
+          const x = p0[0] + ux * pr.w * f,
+            y = p0[1] + uy * pr.w * f + th;
+          out.push({
+            k: "line",
+            a: [x, y],
+            b: [x, F],
+            w: 4,
+            col: "equip"
+          });
+        });
+        break;
+      }
+    case "box":
+      out.push({
+        k: "poly",
+        pts: [[pr.x, pr.y], [pr.x + pr.w, pr.y], [pr.x + pr.w, pr.y + pr.h], [pr.x, pr.y + pr.h]],
+        w: 2,
+        col: "equip",
+        fill: "equipfill"
+      });
+      break;
+    case "pad":
+      out.push({
+        k: "poly",
+        pts: [[pr.x, pr.y], [pr.x + pr.w, pr.y], [pr.x + pr.w, pr.y + pr.h], [pr.x, pr.y + pr.h]],
+        w: 2,
+        col: "equip",
+        fill: "equipfill",
+        rx: pr.rx === undefined ? 3 : pr.rx
+      });
+      break;
+    case "post":
+      out.push({
+        k: "line",
+        a: [pr.x, pr.y === undefined ? F : pr.y],
+        b: [pr.x, pr.top],
+        w: pr.w || 5,
+        col: "equip"
+      });
+      break;
+    case "beam":
+      out.push({
+        k: "line",
+        a: [pr.x1, pr.y],
+        b: [pr.x2, pr.y],
+        w: pr.w || 5,
+        col: "equip"
+      });
+      break;
+    case "pulley":
+      out.push({
+        k: "circle",
+        p: [pr.x, pr.y],
+        r: 4.5,
+        w: 2.5,
+        col: "equip",
+        fill: "bg"
+      });
+      break;
+    case "stack":
+      {
+        out.push({
+          k: "poly",
+          pts: [[pr.x, pr.y], [pr.x + 16, pr.y], [pr.x + 16, F], [pr.x, F]],
+          w: 2,
+          col: "equip",
+          fill: "equipfill"
+        });
+        for (let i = 1; i < 5; i++) out.push({
+          k: "line",
+          a: [pr.x + 1, pr.y + i * ((F - pr.y) / 5)],
+          b: [pr.x + 15, pr.y + i * ((F - pr.y) / 5)],
+          w: 1.5,
+          col: "equip"
+        });
+        break;
+      }
+    case "cable":
+      {
+        const to = fjat(J, pr.to || "wr");
+        out.push({
+          k: "line",
+          a: [pr.x, pr.y],
+          b: to,
+          w: 2,
+          col: "equip",
+          dash: "0"
+        });
+        break;
+      }
+    case "rack":
+      {
+        [pr.x1, pr.x2].forEach(function (x) {
+          out.push({
+            k: "line",
+            a: [x, F],
+            b: [x, pr.top],
+            w: 5,
+            col: "equip"
+          });
+          out.push({
+            k: "line",
+            a: [x, pr.top + 6],
+            b: [x + (x === pr.x1 ? 8 : -8), pr.top],
+            w: 3.5,
+            col: "equip"
+          });
+        });
+        break;
+      }
+    case "plate":
+      {
+        const p = fjat(J, pr.at || "wr");
+        out.push({
+          k: "circle",
+          p: p,
+          r: pr.r || 11,
+          w: 3,
+          col: "equip",
+          fill: "equipfill"
+        });
+        out.push({
+          k: "circle",
+          p: p,
+          r: 3,
+          w: 2,
+          col: "equip"
+        });
+        break;
+      }
+    case "db":
+      _dumbbell(out, fjat(J, pr.at || "wr"), pr.ang === undefined ? 90 : pr.ang, pr.s);
+      break;
+    case "kb":
+      {
+        const p = fjat(J, pr.at || "wr");
+        out.push({
+          k: "circle",
+          p: [p[0], p[1] + 7],
+          r: 8,
+          w: 3,
+          col: "equip",
+          fill: "equipfill"
+        });
+        out.push({
+          k: "path",
+          d: "M" + (p[0] - 5) + " " + (p[1] + 2) + " Q" + p[0] + " " + (p[1] - 7) + " " + (p[0] + 5) + " " + (p[1] + 2),
+          w: 3,
+          col: "equip"
+        });
+        break;
+      }
+    case "handle":
+      {
+        const p = fjat(J, pr.at || "wr");
+        out.push({
+          k: "circle",
+          p: p,
+          r: 4.5,
+          w: 3,
+          col: "equip",
+          fill: "equipfill"
+        });
+        break;
+      }
+    case "sled":
+      {
+        const a = (pr.ang || 0) * _D2R,
+          ux = Math.cos(a),
+          uy = -Math.sin(a);
+        const p0 = [pr.x, pr.y],
+          p1 = [pr.x + ux * pr.w, pr.y + uy * pr.w];
+        const nx = -uy * 8,
+          ny = ux * 8;
+        out.push({
+          k: "poly",
+          pts: [p0, p1, [p1[0] + nx, p1[1] + ny], [p0[0] + nx, p0[1] + ny]],
+          w: 2.5,
+          col: "equip",
+          fill: "equipfill"
+        });
+        break;
+      }
+    case "wheel":
+      {
+        out.push({
+          k: "circle",
+          p: [pr.x, pr.y],
+          r: pr.r || 14,
+          w: 3,
+          col: "equip"
+        });
+        out.push({
+          k: "circle",
+          p: [pr.x, pr.y],
+          r: 3,
+          w: 2,
+          col: "equip"
+        });
+        break;
+      }
+    case "arc":
+      out.push({
+        k: "path",
+        d: pr.d,
+        w: pr.w || 2.5,
+        col: pr.col || "equip",
+        dash: pr.dash
+      });
+      break;
+    case "barline":
+      {
+        const a = fjat(J, pr.a),
+          b = fjat(J, pr.b);
+        const dx = b[0] - a[0],
+          dy = b[1] - a[1],
+          L = Math.sqrt(dx * dx + dy * dy) || 1;
+        const ux = dx / L,
+          uy = dy / L,
+          ov = 16;
+        out.push({
+          k: "line",
+          a: [a[0] + ux * ov, a[1] + uy * ov],
+          b: [b[0] - ux * ov, b[1] - uy * ov],
+          w: 3.5,
+          col: "equip"
+        });
+        if (pr.r) {
+          out.push({
+            k: "circle",
+            p: [a[0] + ux * ov, a[1] + uy * ov],
+            r: pr.r,
+            w: 3,
+            col: "equip",
+            fill: "equipfill"
+          });
+          out.push({
+            k: "circle",
+            p: [b[0] - ux * ov, b[1] - uy * ov],
+            r: pr.r,
+            w: 3,
+            col: "equip",
+            fill: "equipfill"
+          });
+        }
+        break;
+      }
+    case "belt":
+      {
+        out.push({
+          k: "poly",
+          pts: [[pr.x, pr.y], [pr.x + pr.w, pr.y], [pr.x + pr.w, pr.y + 6], [pr.x, pr.y + 6]],
+          w: 2,
+          col: "equip",
+          fill: "equipfill"
+        });
+        out.push({
+          k: "line",
+          a: [pr.x + pr.w, pr.y + 3],
+          b: [pr.x + pr.w + 4, pr.y - (pr.rise || 18)],
+          w: 3,
+          col: "equip"
+        });
+        break;
+      }
+  }
+}
+function fbody(J, out, far, front) {
+  const c = far && !front ? "dim" : "body";
+  const w = far && !front ? 5 : 7;
+  const A = far ? J.aF : J.aN,
+    L = far ? J.lF : J.lN;
+  out.push({
+    k: "line",
+    a: L.hip,
+    b: L.kn,
+    w: w,
+    col: c
+  });
+  out.push({
+    k: "line",
+    a: L.kn,
+    b: L.an,
+    w: w,
+    col: c
+  });
+  out.push({
+    k: "line",
+    a: L.an,
+    b: L.toe,
+    w: w - 2,
+    col: c
+  });
+  out.push({
+    k: "line",
+    a: A.sh,
+    b: A.el,
+    w: w,
+    col: c
+  });
+  out.push({
+    k: "line",
+    a: A.el,
+    b: A.wr,
+    w: w,
+    col: c
+  });
+}
+function ftrail(ex, A, B, out) {
+  const p0 = fjat(fjoints(A), ex.trail),
+    p1 = fjat(fjoints(B), ex.trail);
+  const dx = p1[0] - p0[0],
+    dy = p1[1] - p0[1],
+    d = Math.sqrt(dx * dx + dy * dy);
+  if (d < 8) return;
+  const bow = ex.bow === undefined ? 0.16 : ex.bow;
+  const mx = (p0[0] + p1[0]) / 2 - dy * bow,
+    my = (p0[1] + p1[1]) / 2 + dx * bow;
+  out.push({
+    k: "path",
+    d: "M" + p0[0].toFixed(1) + " " + p0[1].toFixed(1) + " Q" + mx.toFixed(1) + " " + my.toFixed(1) + " " + p1[0].toFixed(1) + " " + p1[1].toFixed(1),
+    w: 2.5,
+    col: "trail",
+    dash: "5 5"
+  });
+  const ang = Math.atan2(p1[1] - my, p1[0] - mx);
+  const ah = 8;
+  out.push({
+    k: "poly",
+    pts: [p1, [p1[0] - Math.cos(ang - 0.42) * ah, p1[1] - Math.sin(ang - 0.42) * ah], [p1[0] - Math.cos(ang + 0.42) * ah, p1[1] - Math.sin(ang + 0.42) * ah]],
+    w: 1,
+    col: "trail",
+    fill: "trail"
+  });
+}
+// Build the full shape list for exercise `ex` at animation position t (0..1)
+// keep angles on the short path so nothing spins the long way round between poses
+function _unw(b, a) {
+  while (b - a > 180) b -= 360;
+  while (b - a < -180) b += 360;
+  return b;
+}
+function funwrap(B, A) {
+  B.torso = _unw(B.torso, A.torso);
+  B.head = _unw(B.head, A.head);
+  ["arm", "arm2"].forEach(function (k) {
+    B[k][0] = _unw(B[k][0], A[k][0]);
+    B[k][1] = _unw(B[k][1], A[k][1]);
+  });
+  ["leg", "leg2"].forEach(function (k) {
+    for (let i = 0; i < 3; i++) B[k][i] = _unw(B[k][i], A[k][i]);
+  });
+  return B;
+}
+function figShapes(ex, t) {
+  const A = fnorm(ex.start, ex.front),
+    B = funwrap(fnorm(Object.assign({}, ex.start, ex.end), ex.front), A);
+  const p = flerp(A, B, t);
+  const J = fjoints(p);
+  const out = [];
+  const props = ex.props || [];
+  const ox = ex.front ? p.far[0] / 2 : 0,
+    oy = ex.front ? p.far[1] / 2 : 0;
+  const sft = function (q) {
+    return [q[0] + ox, q[1] + oy];
+  };
+  props.forEach(function (pr) {
+    if (!_FRONTPROPS[pr.t]) fprop(pr, J, out);
+  });
+  if (ex.trail) ftrail(ex, A, B, out);
+  fbody(J, out, true, ex.front);
+  out.push({
+    k: "line",
+    a: sft(J.hip),
+    b: sft(J.sh),
+    w: ex.front ? 13 : 9,
+    col: "body"
+  });
+  out.push({
+    k: "line",
+    a: sft(J.sh),
+    b: sft(J.neck),
+    w: 6,
+    col: "body"
+  });
+  fbody(J, out, false, ex.front);
+  out.push({
+    k: "circle",
+    p: sft(J.headC),
+    r: SEG.head,
+    w: 5,
+    col: "accent",
+    fill: "bg"
+  });
+  props.forEach(function (pr) {
+    if (_FRONTPROPS[pr.t]) fprop(pr, J, out);
+  });
+  return out;
+}
+// <<<FIGURE_ENGINE_END>>>
+
+// <<<FIGURE_DATA_START>>>
+// ---- Per-exercise poses. start -> end -> back again (looping animation). ----
+const _FLOOR = [{
+  t: "floor"
+}];
+const _BENCH = [{
+  t: "floor"
+}, {
+  t: "bench",
+  x: 44,
+  y: 118,
+  w: 106
+}];
+const _SEATB = [{
+  t: "floor"
+}, {
+  t: "pad",
+  x: 62,
+  y: 130,
+  w: 48,
+  h: 7
+}, {
+  t: "pad",
+  x: 58,
+  y: 86,
+  w: 8,
+  h: 46
+}];
+const EXERCISE_FIG = {
+  "Barbell Bench Press": {
+    lab: ["Lockout", "Bar to chest"],
+    start: {
+      hip: [116, 112],
+      torso: 268,
+      legTo: [140, 150],
+      armTo: [82, 77],
+      armBend: 1
+    },
+    end: {
+      armTo: [92, 96],
+      armBend: 1
+    },
+    props: _BENCH.concat([{
+      t: "plate",
+      at: "wr",
+      r: 11
+    }]),
+    trail: "wr"
+  },
+  "Dumbbell Bench Press": {
+    lab: ["Lockout", "Bottom"],
+    start: {
+      hip: [116, 112],
+      torso: 268,
+      legTo: [140, 150],
+      armTo: [82, 77],
+      armBend: 1
+    },
+    end: {
+      armTo: [94, 98],
+      armBend: 1
+    },
+    props: _BENCH.concat([{
+      t: "db",
+      at: "wr",
+      ang: 90
+    }]),
+    trail: "wr"
+  },
+  "Close-Grip Bench Press": {
+    lab: ["Lockout", "Elbows tucked"],
+    start: {
+      hip: [116, 112],
+      torso: 268,
+      legTo: [140, 150],
+      armTo: [82, 77],
+      armBend: 1
+    },
+    end: {
+      armTo: [86, 100],
+      armBend: 1
+    },
+    props: _BENCH.concat([{
+      t: "plate",
+      at: "wr",
+      r: 11
+    }]),
+    trail: "wr"
+  },
+  "Skull Crushers": {
+    lab: ["Arms locked", "Behind the head"],
+    start: {
+      hip: [116, 112],
+      torso: 268,
+      legTo: [140, 150],
+      arm: [354, 354]
+    },
+    end: {
+      arm: [354, 288]
+    },
+    props: _BENCH.concat([{
+      t: "plate",
+      at: "wr",
+      r: 10
+    }]),
+    trail: "wr"
+  },
+  "Incline Dumbbell Press": {
+    lab: ["Bottom", "Press up"],
+    start: {
+      hip: [112, 110],
+      torso: 300,
+      legTo: [136, 150],
+      armTo: [90, 81],
+      armBend: 1
+    },
+    end: {
+      armTo: [101, 62],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "bench",
+      x: 70,
+      y: 92,
+      w: 82,
+      tilt: -30
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }],
+    trail: "wr"
+  },
+  "Machine Chest Press": {
+    lab: ["Start", "Press out"],
+    start: {
+      hip: [82, 124],
+      torso: 2,
+      legTo: [108, 148],
+      arm: [160, 20]
+    },
+    end: {
+      arm: [92, 92]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "pad",
+      x: 60,
+      y: 130,
+      w: 46,
+      h: 7
+    }, {
+      t: "pad",
+      x: 56,
+      y: 84,
+      w: 8,
+      h: 48
+    }, {
+      t: "post",
+      x: 150,
+      top: 70
+    }, {
+      t: "beam",
+      x1: 130,
+      x2: 150,
+      y: 70
+    }, {
+      t: "handle",
+      at: "wr"
+    }],
+    trail: "wr"
+  },
+  "Cable Fly": {
+    lab: ["Open", "Squeeze"],
+    start: {
+      hip: [100, 101],
+      torso: 8,
+      legTo: [102, 148],
+      armTo: [80, 62],
+      armBend: 1
+    },
+    end: {
+      armTo: [132, 82],
+      armBend: -1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 22,
+      top: 40
+    }, {
+      t: "pulley",
+      x: 22,
+      y: 44
+    }, {
+      t: "stack",
+      x: 14,
+      y: 96
+    }, {
+      t: "cable",
+      x: 22,
+      y: 44,
+      to: "wr"
+    }, {
+      t: "handle",
+      at: "wr"
+    }],
+    trail: "wr",
+    bow: 0.22
+  },
+  "Push-Up": {
+    lab: ["Top", "Chest to floor"],
+    start: {
+      hip: [110, 128],
+      torso: 289,
+      legTo: [156, 146],
+      foot: 150,
+      armTo: [76, 150],
+      armBend: 1
+    },
+    end: {
+      hip: [110, 140],
+      armTo: [76, 150],
+      legTo: [156, 150],
+      armBend: 1
+    },
+    props: _FLOOR,
+    trail: "sh"
+  },
+  "Incline Push-Up": {
+    lab: ["Top", "Chest to bench"],
+    start: {
+      hip: [120, 112],
+      torso: 300,
+      legTo: [156, 144],
+      foot: 150,
+      armTo: [78, 128],
+      armBend: 1
+    },
+    end: {
+      hip: [120, 124],
+      legTo: [156, 150],
+      armTo: [78, 128],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "box",
+      x: 58,
+      y: 130,
+      w: 42,
+      h: 22
+    }],
+    trail: "sh"
+  },
+  "Pike Push-Up": {
+    lab: ["Hips high", "Head down"],
+    start: {
+      hip: [100, 100],
+      torso: 123,
+      legTo: [82, 146],
+      armTo: [140, 150],
+      armBend: -1
+    },
+    end: {
+      hip: [106, 110],
+      torso: 130,
+      legTo: [84, 146],
+      armTo: [140, 150],
+      armBend: -1
+    },
+    props: _FLOOR,
+    trail: "head"
+  },
+  "Bent-Over Barbell Row": {
+    lab: ["Bar hanging", "Row to ribs"],
+    start: {
+      hip: [110, 102],
+      torso: 55,
+      legTo: [104, 148],
+      armTo: [138, 124],
+      armBend: 1
+    },
+    end: {
+      armTo: [126, 100],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 12
+    }],
+    trail: "wr"
+  },
+  "One-Arm Dumbbell Row": {
+    lab: ["Stretch", "Elbow back"],
+    start: {
+      hip: [112, 104],
+      torso: 62,
+      legTo: [100, 148],
+      legTo2: [140, 126],
+      foot2: 60,
+      armTo: [140, 126],
+      armTo2: [150, 124],
+      armBend: 1
+    },
+    end: {
+      armTo: [128, 102],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "box",
+      x: 122,
+      y: 126,
+      w: 52,
+      h: 26
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }],
+    trail: "wr"
+  },
+  "Chest-Supported Row": {
+    lab: ["Arms down", "Pull"],
+    start: {
+      hip: [118, 120],
+      torso: 300,
+      legTo: [128, 148],
+      armTo: [92, 138],
+      armBend: 1
+    },
+    end: {
+      armTo: [78, 112],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "bench",
+      x: 72,
+      y: 86,
+      w: 76,
+      tilt: -50
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }],
+    trail: "wr"
+  },
+  "Lat Pulldown": {
+    front: true,
+    lab: ["Arms overhead", "Bar to chest"],
+    start: {
+      hip: [104, 116],
+      torso: 0,
+      legTo: [113, 150],
+      legTo2: [95, 150],
+      armTo: [126, 52],
+      armTo2: [82, 52],
+      armBend: -1,
+      armBend2: 1
+    },
+    end: {
+      armTo: [124, 90],
+      armTo2: [84, 90]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 40,
+      y: 152,
+      top: 30
+    }, {
+      t: "beam",
+      x1: 40,
+      x2: 104,
+      y: 30
+    }, {
+      t: "cable",
+      x: 104,
+      y: 30,
+      to: "sh"
+    }, {
+      t: "barline",
+      a: "wr",
+      b: "wrF",
+      r: 0
+    }],
+    trail: "wr"
+  },
+  "Seated Cable Row": {
+    lab: ["Reach", "Pull to stomach"],
+    start: {
+      hip: [86, 124],
+      torso: 8,
+      legTo: [122, 140],
+      foot: 55,
+      armTo: [120, 100],
+      armBend: 1
+    },
+    end: {
+      torso: -5,
+      armTo: [92, 108],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "pad",
+      x: 60,
+      y: 130,
+      w: 46,
+      h: 7
+    }, {
+      t: "box",
+      x: 122,
+      y: 138,
+      w: 20,
+      h: 14
+    }, {
+      t: "post",
+      x: 152,
+      y: 152,
+      top: 108
+    }, {
+      t: "stack",
+      x: 156,
+      y: 112
+    }, {
+      t: "cable",
+      x: 148,
+      y: 130,
+      to: "wr"
+    }, {
+      t: "handle",
+      at: "wr"
+    }],
+    trail: "wr"
+  },
+  "Pull-Up": {
+    front: true,
+    lab: ["Dead hang", "Chin over bar"],
+    start: {
+      hip: [104, 104],
+      torso: 0,
+      legTo: [112, 146],
+      legTo2: [96, 146],
+      armTo: [122, 36],
+      armTo2: [86, 36],
+      armBend: -1,
+      armBend2: 1
+    },
+    end: {
+      hip: [104, 80],
+      legTo: [112, 122],
+      legTo2: [96, 122],
+      armTo: [122, 36],
+      armTo2: [86, 36]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 54,
+      y: 152,
+      top: 34
+    }, {
+      t: "post",
+      x: 154,
+      y: 152,
+      top: 34
+    }, {
+      t: "beam",
+      x1: 54,
+      x2: 154,
+      y: 34
+    }],
+    trail: "sh"
+  },
+  "Hanging Leg Raise": {
+    lab: ["Hang", "Legs up"],
+    start: {
+      hip: [104, 104],
+      torso: 358,
+      armTo: [102, 36],
+      leg: [180, 180]
+    },
+    end: {
+      leg: [92, 92]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 54,
+      y: 152,
+      top: 34
+    }, {
+      t: "post",
+      x: 154,
+      y: 152,
+      top: 34
+    }, {
+      t: "beam",
+      x1: 54,
+      x2: 154,
+      y: 34
+    }],
+    trail: "an"
+  },
+  "Overhead Press": {
+    lab: ["Bar at collarbone", "Lockout"],
+    start: {
+      hip: [104, 99],
+      torso: 0,
+      legTo: [104, 147],
+      armTo: [116, 74],
+      armBend: -1
+    },
+    end: {
+      armTo: [106, 31]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 11
+    }],
+    trail: "wr"
+  },
+  "Dumbbell Shoulder Press": {
+    lab: ["Start", "Press up"],
+    start: {
+      hip: [86, 124],
+      torso: 2,
+      legTo: [110, 148],
+      armTo: [100, 98],
+      armBend: -1
+    },
+    end: {
+      armTo: [92, 56]
+    },
+    props: _SEATB.concat([{
+      t: "db",
+      at: "wr",
+      ang: 90
+    }]),
+    trail: "wr"
+  },
+  "Arnold Press": {
+    lab: ["Palms in", "Press & rotate"],
+    start: {
+      hip: [86, 124],
+      torso: 2,
+      legTo: [110, 148],
+      armTo: [106, 96],
+      armBend: -1
+    },
+    end: {
+      armTo: [92, 56]
+    },
+    props: _SEATB.concat([{
+      t: "db",
+      at: "wr",
+      ang: 90
+    }]),
+    trail: "wr"
+  },
+  "Dumbbell Lateral Raise": {
+    front: true,
+    lab: ["Arms down", "Shoulder height"],
+    start: {
+      hip: [104, 99],
+      torso: 0,
+      legTo: [112, 150],
+      legTo2: [96, 150],
+      armTo: [112, 100],
+      armTo2: [96, 100],
+      armBend: -1,
+      armBend2: 1
+    },
+    end: {
+      armTo: [142, 66],
+      armTo2: [66, 66]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }, {
+      t: "db",
+      at: "wrF",
+      ang: 90
+    }],
+    trail: "wr"
+  },
+  "Rear-Delt Fly": {
+    front: true,
+    lab: ["Hands together", "Open wide"],
+    start: {
+      hip: [104, 102],
+      torso: 0,
+      legTo: [112, 150],
+      legTo2: [96, 150],
+      armTo: [108, 110],
+      armTo2: [100, 110],
+      armBend: -1,
+      armBend2: 1
+    },
+    end: {
+      armTo: [140, 78],
+      armTo2: [68, 78]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }, {
+      t: "db",
+      at: "wrF",
+      ang: 90
+    }],
+    trail: "wr"
+  },
+  "Face Pull": {
+    front: true,
+    lab: ["Arms extended", "Pull to face"],
+    start: {
+      hip: [104, 99],
+      torso: 0,
+      legTo: [112, 150],
+      legTo2: [96, 150],
+      armTo: [116, 58],
+      armTo2: [92, 58],
+      armBend: -1,
+      armBend2: 1
+    },
+    end: {
+      armTo: [142, 46],
+      armTo2: [66, 46]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 104,
+      y: 34,
+      top: 14
+    }, {
+      t: "beam",
+      x1: 80,
+      x2: 128,
+      y: 14
+    }, {
+      t: "pulley",
+      x: 104,
+      y: 36
+    }, {
+      t: "cable",
+      x: 104,
+      y: 36,
+      to: "wr"
+    }, {
+      t: "cable",
+      x: 104,
+      y: 36,
+      to: "wrF"
+    }],
+    trail: "wr"
+  },
+  "Dumbbell Bicep Curl": {
+    lab: ["Arms down", "Squeeze at top"],
+    start: {
+      hip: [104, 99],
+      torso: 0,
+      legTo: [104, 147],
+      armTo: [106, 101],
+      armBend: -1
+    },
+    end: {
+      armTo: [117, 79]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }],
+    trail: "wr"
+  },
+  "Hammer Curl": {
+    lab: ["Neutral grip", "Curl up"],
+    start: {
+      hip: [104, 99],
+      torso: 0,
+      legTo: [104, 147],
+      armTo: [106, 101],
+      armBend: -1
+    },
+    end: {
+      armTo: [115, 81]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 20
+    }],
+    trail: "wr"
+  },
+  "Barbell Curl": {
+    lab: ["Arms down", "Curl up"],
+    start: {
+      hip: [104, 99],
+      torso: 0,
+      legTo: [104, 147],
+      armTo: [110, 101],
+      armBend: -1
+    },
+    end: {
+      armTo: [119, 81]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 10
+    }],
+    trail: "wr"
+  },
+  "Cable Curl": {
+    lab: ["Arms down", "Curl up"],
+    start: {
+      hip: [102, 100],
+      torso: 4,
+      legTo: [102, 148],
+      armTo: [112, 102],
+      armBend: -1
+    },
+    end: {
+      armTo: [122, 78]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 172,
+      y: 152,
+      top: 116
+    }, {
+      t: "stack",
+      x: 176,
+      y: 118
+    }, {
+      t: "pulley",
+      x: 168,
+      y: 142
+    }, {
+      t: "cable",
+      x: 168,
+      y: 142,
+      to: "wr"
+    }, {
+      t: "handle",
+      at: "wr"
+    }],
+    trail: "wr"
+  },
+  "Preacher Curl": {
+    lab: ["Arms extended", "Curl up"],
+    start: {
+      hip: [80, 124],
+      torso: 15,
+      arm: [141, 118],
+      legTo: [104, 148]
+    },
+    end: {
+      arm: [141, 22]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "pad",
+      x: 58,
+      y: 130,
+      w: 40,
+      h: 7
+    }, {
+      t: "sled",
+      x: 96,
+      y: 102,
+      w: 42,
+      ang: -40
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 9
+    }],
+    trail: "wr"
+  },
+  "Tricep Pushdown": {
+    lab: ["Elbows bent", "Lock out"],
+    start: {
+      hip: [102, 100],
+      torso: 6,
+      legTo: [102, 148],
+      armTo: [116, 88],
+      armBend: -1
+    },
+    end: {
+      armTo: [112, 112]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 162,
+      y: 152,
+      top: 34
+    }, {
+      t: "pulley",
+      x: 158,
+      y: 38
+    }, {
+      t: "stack",
+      x: 166,
+      y: 60
+    }, {
+      t: "cable",
+      x: 158,
+      y: 38,
+      to: "wr"
+    }, {
+      t: "handle",
+      at: "wr"
+    }],
+    trail: "wr"
+  },
+  "Overhead Tricep Extension": {
+    lab: ["Behind the head", "Extend up"],
+    start: {
+      hip: [104, 99],
+      torso: 0,
+      legTo: [104, 147],
+      arm: [10, 250]
+    },
+    end: {
+      arm: [10, 8]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 20
+    }],
+    trail: "wr"
+  },
+  "Bench Dip": {
+    lab: ["Top", "Bottom"],
+    start: {
+      hip: [110, 124],
+      torso: 350,
+      legTo: [156, 148],
+      armTo: [80, 124],
+      armBend: 1
+    },
+    end: {
+      hip: [110, 140],
+      armTo: [80, 124],
+      legTo: [156, 148],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "box",
+      x: 60,
+      y: 124,
+      w: 38,
+      h: 28
+    }],
+    trail: "hip"
+  },
+  "Barbell Back Squat": {
+    lab: ["Stand tall", "Hit depth"],
+    start: {
+      hip: [104, 99],
+      torso: 5,
+      legTo: [104, 147],
+      armTo: [96, 68],
+      armBend: -1
+    },
+    end: {
+      hip: [100, 124],
+      torso: 35,
+      legTo: [104, 147],
+      armTo: [112, 98]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 12
+    }],
+    trail: "hip"
+  },
+  "Goblet Squat": {
+    lab: ["Stand tall", "Squat down"],
+    start: {
+      hip: [104, 99],
+      torso: 5,
+      legTo: [104, 147],
+      armTo: [112, 82],
+      armBend: -1
+    },
+    end: {
+      hip: [100, 124],
+      torso: 30,
+      legTo: [104, 147],
+      armTo: [124, 104]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "kb",
+      at: "wr"
+    }],
+    trail: "hip"
+  },
+  "Hack Squat": {
+    lab: ["Top", "Bottom"],
+    start: {
+      hip: [96, 104],
+      torso: 340,
+      legTo: [124, 148],
+      armTo: [86, 96],
+      armBend: 1
+    },
+    end: {
+      hip: [92, 126],
+      legTo: [124, 148],
+      armTo: [82, 118],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "sled",
+      x: 62,
+      y: 150,
+      w: 82,
+      ang: 66
+    }],
+    trail: "hip"
+  },
+  "Leg Press": {
+    lab: ["Knees bent", "Press out"],
+    start: {
+      hip: [80, 120],
+      torso: 285,
+      legTo: [112, 104],
+      armTo: [66, 132],
+      armBend: 1
+    },
+    end: {
+      legTo: [128, 92]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "pad",
+      x: 34,
+      y: 126,
+      w: 54,
+      h: 8
+    }, {
+      t: "sled",
+      x: 128,
+      y: 68,
+      w: 42,
+      ang: -58
+    }],
+    trail: "an"
+  },
+  "Leg Extension": {
+    lab: ["Shins down", "Extend"],
+    start: {
+      hip: [82, 124],
+      torso: 4,
+      leg: [90, 178],
+      armTo: [96, 126],
+      armBend: 1
+    },
+    end: {
+      leg: [90, 96]
+    },
+    props: _SEATB.concat([{
+      t: "plate",
+      at: "an",
+      r: 7
+    }]),
+    trail: "an"
+  },
+  "Seated Leg Curl": {
+    lab: ["Legs out", "Curl under"],
+    start: {
+      hip: [82, 122],
+      torso: 6,
+      leg: [92, 100],
+      armTo: [96, 124],
+      armBend: 1
+    },
+    end: {
+      leg: [92, 168]
+    },
+    props: _SEATB.concat([{
+      t: "pad",
+      x: 98,
+      y: 108,
+      w: 24,
+      h: 7
+    }, {
+      t: "plate",
+      at: "an",
+      r: 7
+    }]),
+    trail: "an"
+  },
+  "Lying Leg Curl": {
+    lab: ["Legs straight", "Heels up"],
+    start: {
+      hip: [112, 124],
+      torso: 265,
+      leg: [95, 95],
+      armTo: [62, 138],
+      armBend: 1
+    },
+    end: {
+      leg: [95, 18]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "bench",
+      x: 52,
+      y: 130,
+      w: 100
+    }, {
+      t: "plate",
+      at: "an",
+      r: 7
+    }],
+    trail: "an"
+  },
+  "Bulgarian Split Squat": {
+    lab: ["Top", "Bottom"],
+    start: {
+      hip: [104, 104],
+      torso: 8,
+      legTo: [102, 148],
+      legTo2: [70, 126],
+      foot2: 130,
+      armTo: [110, 106],
+      armBend: 1
+    },
+    end: {
+      hip: [102, 119],
+      torso: 12,
+      legTo: [102, 148],
+      legTo2: [70, 126],
+      armTo: [110, 121]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "box",
+      x: 52,
+      y: 126,
+      w: 32,
+      h: 26
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }],
+    trail: "hip"
+  },
+  "Walking Lunge": {
+    lab: ["Step out", "Lunge down"],
+    start: {
+      hip: [100, 102],
+      torso: 5,
+      legTo: [118, 148],
+      legTo2: [84, 148],
+      armTo: [104, 104],
+      armBend: 1
+    },
+    end: {
+      hip: [100, 122],
+      torso: 8,
+      legTo: [124, 148],
+      legTo2: [74, 142],
+      foot2: 150,
+      legBend2: 1,
+      armTo: [106, 124]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }],
+    trail: "hip"
+  },
+  "Step-Up": {
+    lab: ["Foot on box", "Drive up"],
+    start: {
+      hip: [92, 102],
+      torso: 10,
+      legTo: [112, 132],
+      legTo2: [78, 148],
+      armTo: [96, 104],
+      armBend: 1
+    },
+    end: {
+      hip: [112, 84],
+      torso: 6,
+      legTo: [112, 130],
+      legTo2: [126, 112],
+      legBend2: 1,
+      armTo: [116, 86]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "box",
+      x: 100,
+      y: 132,
+      w: 54,
+      h: 20
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }],
+    trail: "hip"
+  },
+  "Romanian Deadlift": {
+    lab: ["Stand tall", "Hinge back"],
+    start: {
+      hip: [104, 99],
+      torso: 3,
+      legTo: [104, 147],
+      armTo: [110, 101],
+      armBend: 1
+    },
+    end: {
+      hip: [88, 104],
+      torso: 62,
+      legTo: [104, 147],
+      armTo: [118, 124]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 12
+    }],
+    trail: "wr"
+  },
+  "Dumbbell Romanian Deadlift": {
+    lab: ["Stand tall", "Hinge back"],
+    start: {
+      hip: [104, 99],
+      torso: 3,
+      legTo: [104, 147],
+      armTo: [110, 101],
+      armBend: 1
+    },
+    end: {
+      hip: [88, 104],
+      torso: 62,
+      legTo: [104, 147],
+      armTo: [118, 124]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }],
+    trail: "wr"
+  },
+  "Deadlift": {
+    lab: ["Set up", "Stand it up"],
+    start: {
+      hip: [92, 110],
+      torso: 50,
+      legTo: [106, 147],
+      armTo: [116, 130],
+      armBend: 1
+    },
+    end: {
+      hip: [104, 99],
+      torso: 4,
+      legTo: [104, 147],
+      armTo: [110, 101]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 13
+    }],
+    trail: "wr"
+  },
+  "Sumo Deadlift": {
+    front: true,
+    lab: ["Set up", "Lock out"],
+    start: {
+      hip: [104, 118],
+      torso: 8,
+      legTo: [136, 150],
+      legTo2: [72, 150],
+      legBend: 1,
+      legBend2: -1,
+      armTo: [116, 138],
+      armTo2: [92, 138],
+      armBend: -1,
+      armBend2: 1
+    },
+    end: {
+      hip: [104, 98],
+      torso: 2,
+      legTo: [132, 150],
+      legTo2: [76, 150],
+      armTo: [116, 116],
+      armTo2: [92, 116]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "barline",
+      a: "wr",
+      b: "wrF",
+      r: 11
+    }],
+    trail: "wr"
+  },
+  "Good Morning": {
+    lab: ["Stand tall", "Hinge forward"],
+    start: {
+      hip: [104, 99],
+      torso: 5,
+      legTo: [104, 147],
+      armTo: [96, 68],
+      armBend: -1
+    },
+    end: {
+      hip: [88, 102],
+      torso: 70,
+      legTo: [104, 147],
+      armTo: [112, 94]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 12
+    }],
+    trail: "sh"
+  },
+  "Barbell Hip Thrust": {
+    lab: ["Hips down", "Squeeze at top"],
+    start: {
+      hip: [104, 140],
+      torso: 300,
+      legTo: [128, 148],
+      armTo: [100, 140],
+      armBend: 1
+    },
+    end: {
+      hip: [104, 120],
+      torso: 275,
+      legTo: [128, 148],
+      armTo: [100, 120]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "box",
+      x: 44,
+      y: 124,
+      w: 46,
+      h: 28
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 12
+    }],
+    trail: "hip"
+  },
+  "Glute Bridge": {
+    lab: ["Hips down", "Hips up"],
+    start: {
+      hip: [104, 146],
+      torso: 267,
+      legTo: [130, 150],
+      armTo: [86, 150],
+      armBend: 1
+    },
+    end: {
+      hip: [100, 130],
+      torso: 239,
+      legTo: [130, 150],
+      armTo: [86, 150]
+    },
+    props: _FLOOR,
+    trail: "hip"
+  },
+  "Cable Kickback": {
+    lab: ["Leg down", "Kick back"],
+    start: {
+      hip: [104, 102],
+      torso: 12,
+      legTo: [100, 148],
+      legTo2: [106, 148],
+      armTo: [138, 112],
+      armBend: 1
+    },
+    end: {
+      legTo2: [70, 130],
+      legBend2: 1,
+      foot2: 130
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 174,
+      y: 152,
+      top: 116
+    }, {
+      t: "stack",
+      x: 178,
+      y: 118
+    }, {
+      t: "pulley",
+      x: 170,
+      y: 142
+    }, {
+      t: "cable",
+      x: 170,
+      y: 142,
+      to: "anF"
+    }],
+    trail: "anF"
+  },
+  "Hip Abduction Machine": {
+    front: true,
+    lab: ["Knees in", "Push apart"],
+    start: {
+      hip: [104, 118],
+      torso: 0,
+      legTo: [112, 150],
+      legTo2: [96, 150],
+      armTo: [118, 110],
+      armTo2: [90, 110],
+      armBend: -1,
+      armBend2: 1
+    },
+    end: {
+      legTo: [136, 148],
+      legTo2: [72, 148]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "pad",
+      x: 58,
+      y: 124,
+      w: 92,
+      h: 7
+    }, {
+      t: "plate",
+      at: "kn",
+      r: 7
+    }, {
+      t: "plate",
+      at: "knF",
+      r: 7
+    }],
+    trail: "kn"
+  },
+  "Standing Calf Raise": {
+    lab: ["Heels down", "Up on toes"],
+    start: {
+      hip: [104, 91],
+      torso: 0,
+      legTo: [104, 139],
+      foot: 100,
+      armTo: [108, 95],
+      armBend: -1
+    },
+    end: {
+      hip: [104, 82],
+      legTo: [104, 130],
+      foot: 142,
+      armTo: [108, 86]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "box",
+      x: 94,
+      y: 142,
+      w: 36,
+      h: 10
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }],
+    trail: "sh"
+  },
+  "Single-Leg Calf Raise": {
+    lab: ["Heel down", "Up on the toe"],
+    start: {
+      hip: [104, 91],
+      torso: 0,
+      legTo: [104, 139],
+      foot: 100,
+      leg2: [160, 300],
+      armTo: [108, 95],
+      armBend: -1
+    },
+    end: {
+      hip: [104, 82],
+      legTo: [104, 130],
+      foot: 142,
+      armTo: [108, 86]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "box",
+      x: 94,
+      y: 142,
+      w: 36,
+      h: 10
+    }, {
+      t: "db",
+      at: "wr",
+      ang: 90
+    }],
+    trail: "sh"
+  },
+  "Seated Calf Raise": {
+    lab: ["Heels down", "Press up"],
+    start: {
+      hip: [82, 124],
+      torso: 3,
+      leg: [90, 180, 112],
+      armTo: [96, 118],
+      armBend: 1
+    },
+    end: {
+      leg: [90, 180, 146]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "pad",
+      x: 60,
+      y: 130,
+      w: 44,
+      h: 7
+    }, {
+      t: "box",
+      x: 100,
+      y: 146,
+      w: 26,
+      h: 6
+    }, {
+      t: "pad",
+      x: 94,
+      y: 110,
+      w: 26,
+      h: 8
+    }],
+    trail: "toe"
+  },
+  "Leg-Press Calf Raise": {
+    lab: ["Toes back", "Press through"],
+    start: {
+      hip: [80, 120],
+      torso: 285,
+      legTo: [126, 94],
+      foot: 20,
+      armTo: [66, 132],
+      armBend: 1
+    },
+    end: {
+      foot: 78
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "pad",
+      x: 34,
+      y: 126,
+      w: 54,
+      h: 8
+    }, {
+      t: "sled",
+      x: 130,
+      y: 62,
+      w: 42,
+      ang: -58
+    }],
+    trail: "toe"
+  },
+  "Plank Hold (45s)": {
+    lab: ["Hold", "Hold"],
+    start: {
+      hip: [112, 142],
+      torso: 285,
+      legTo: [158, 150],
+      foot: 150,
+      arm: [180, 264]
+    },
+    end: {
+      hip: [112, 144],
+      torso: 286
+    },
+    props: _FLOOR,
+    dur: 2600
+  },
+  "Mountain Climbers (40s)": {
+    lab: ["Legs back", "Drive the knee"],
+    start: {
+      hip: [110, 128],
+      torso: 289,
+      legTo: [154, 148],
+      foot: 150,
+      legTo2: [150, 150],
+      armTo: [76, 150],
+      armBend: 1
+    },
+    end: {
+      legTo: [122, 136],
+      legBend: 1,
+      foot: 120
+    },
+    props: _FLOOR,
+    trail: "kn",
+    dur: 1200
+  },
+  "Cable Crunch": {
+    lab: ["Tall", "Crunch down"],
+    start: {
+      hip: [100, 126],
+      torso: 352,
+      leg: [175, 95],
+      armTo: [90, 80],
+      armBend: 1
+    },
+    end: {
+      torso: 35,
+      armTo: [124, 90]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 52,
+      y: 152,
+      top: 30
+    }, {
+      t: "pulley",
+      x: 56,
+      y: 34
+    }, {
+      t: "stack",
+      x: 36,
+      y: 56
+    }, {
+      t: "cable",
+      x: 56,
+      y: 34,
+      to: "wr"
+    }],
+    trail: "head"
+  },
+  "Russian Twist": {
+    front: true,
+    lab: ["Twist right", "Twist left"],
+    start: {
+      hip: [104, 132],
+      torso: 350,
+      legTo: [120, 146],
+      legTo2: [92, 146],
+      legBend: -1,
+      legBend2: 1,
+      armTo: [130, 116],
+      armTo2: [124, 118],
+      armBend: -1,
+      armBend2: -1
+    },
+    end: {
+      torso: 10,
+      armTo: [84, 116],
+      armTo2: [78, 118],
+      armBend: 1,
+      armBend2: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 9
+    }],
+    trail: "wr",
+    bow: 0.3
+  },
+  "Bike Sprint Intervals (30s on / 90s off)": {
+    lab: ["Drive", "Drive"],
+    start: {
+      hip: [86, 110],
+      torso: 35,
+      legTo: [116, 116],
+      legTo2: [116, 140],
+      armTo: [128, 96],
+      armBend: 1
+    },
+    end: {
+      legTo: [116, 140],
+      legTo2: [116, 116]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "pad",
+      x: 68,
+      y: 116,
+      w: 30,
+      h: 7
+    }, {
+      t: "post",
+      x: 84,
+      y: 152,
+      top: 116
+    }, {
+      t: "beam",
+      x1: 84,
+      x2: 116,
+      y: 148
+    }, {
+      t: "post",
+      x: 130,
+      y: 148,
+      top: 92
+    }, {
+      t: "beam",
+      x1: 122,
+      x2: 142,
+      y: 92
+    }, {
+      t: "wheel",
+      x: 116,
+      y: 128,
+      r: 12
+    }],
+    dur: 900
+  },
+  "Rowing Intervals (250m)": {
+    lab: ["Catch", "Finish"],
+    start: {
+      hip: [92, 124],
+      torso: 20,
+      legTo: [124, 132],
+      armTo: [130, 110],
+      armBend: 1
+    },
+    end: {
+      hip: [76, 124],
+      torso: 345,
+      legTo: [124, 132],
+      armTo: [96, 116]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "beam",
+      x1: 56,
+      x2: 150,
+      y: 142,
+      w: 4
+    }, {
+      t: "pad",
+      x: 70,
+      y: 130,
+      w: 26,
+      h: 6
+    }, {
+      t: "box",
+      x: 122,
+      y: 118,
+      w: 8,
+      h: 24
+    }, {
+      t: "post",
+      x: 150,
+      y: 142,
+      top: 116
+    }, {
+      t: "cable",
+      x: 148,
+      y: 118,
+      to: "wr"
+    }, {
+      t: "handle",
+      at: "wr"
+    }],
+    trail: "wr"
+  },
+  "Incline Treadmill Walk (25 min)": {
+    lab: ["Step", "Step"],
+    start: {
+      hip: [100, 100],
+      torso: 8,
+      legTo: [116, 140],
+      legTo2: [84, 147],
+      armTo: [88, 110],
+      armTo2: [116, 106],
+      armBend: 1,
+      armBend2: 1
+    },
+    end: {
+      legTo: [86, 147],
+      legTo2: [118, 138],
+      armTo: [116, 106],
+      armTo2: [88, 110]
+    },
+    props: [{
+      t: "sled",
+      x: 56,
+      y: 152,
+      w: 116,
+      ang: 12
+    }, {
+      t: "post",
+      x: 172,
+      y: 128,
+      top: 92
+    }, {
+      t: "beam",
+      x1: 160,
+      x2: 186,
+      y: 92
+    }],
+    dur: 900
+  },
+  "Jump Rope / High Knees (30s)": {
+    front: true,
+    lab: ["Down", "Knee up"],
+    start: {
+      hip: [104, 100],
+      torso: 0,
+      legTo: [112, 150],
+      legTo2: [96, 150],
+      armTo: [126, 106],
+      armTo2: [82, 106],
+      armBend: -1,
+      armBend2: 1
+    },
+    end: {
+      hip: [104, 94],
+      legTo: [116, 122],
+      legBend: -1,
+      legTo2: [96, 146]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "arc",
+      d: "M128 104 Q104 -48 80 104",
+      w: 2.5
+    }],
+    dur: 800
+  }
+};
+// <<<FIGURE_DATA_END>>>
+
 // ---- How-to instructions + form cues for every movement ----
 const EXERCISE_GUIDE = {
   "Barbell Bench Press": {
@@ -5276,6 +7730,151 @@ function SessionDetail({
   }, "Per-set detail wasn't recorded for this session. Exercises: ", (log.exercises || []).join(", ") || "—", ".")));
 }
 
+// <<<FIGURE_COMPONENT_START>>>
+// ============================================================
+// ANIMATED EXERCISE DIAGRAM (drawn from EXERCISE_FIG poses)
+// ============================================================
+const FIG_COL = {
+  body: "var(--text)",
+  dim: "var(--faint)",
+  equip: "var(--muted2)",
+  equipfill: "var(--panel)",
+  floor: "var(--border)",
+  bg: "var(--bg)",
+  trail: "#FFB020"
+};
+function figColor(tok, accent) {
+  return tok === "accent" ? accent : FIG_COL[tok] || tok;
+}
+function figEl(s, i, accent) {
+  const col = figColor(s.col, accent);
+  const fill = s.fill ? figColor(s.fill, accent) : "none";
+  if (s.k === "line") return /*#__PURE__*/React.createElement("line", {
+    key: i,
+    x1: s.a[0].toFixed(1),
+    y1: s.a[1].toFixed(1),
+    x2: s.b[0].toFixed(1),
+    y2: s.b[1].toFixed(1),
+    stroke: col,
+    strokeWidth: s.w,
+    strokeLinecap: s.cap || "round"
+  });
+  if (s.k === "circle") return /*#__PURE__*/React.createElement("circle", {
+    key: i,
+    cx: s.p[0].toFixed(1),
+    cy: s.p[1].toFixed(1),
+    r: s.r,
+    stroke: col,
+    strokeWidth: s.w,
+    fill: fill
+  });
+  if (s.k === "poly") return /*#__PURE__*/React.createElement("polygon", {
+    key: i,
+    points: s.pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" "),
+    stroke: col,
+    strokeWidth: s.w,
+    fill: fill,
+    strokeLinejoin: "round"
+  });
+  if (s.k === "path") return /*#__PURE__*/React.createElement("path", {
+    key: i,
+    d: s.d,
+    stroke: col,
+    strokeWidth: s.w,
+    fill: "none",
+    strokeLinecap: "round",
+    strokeDasharray: s.dash || undefined
+  });
+  return null;
+}
+function ExerciseFigure({
+  name,
+  accent
+}) {
+  const ex = EXERCISE_FIG[name];
+  const [t, setT] = useState(0);
+  const [mode, setMode] = useState("play"); // play | start | end
+  useEffect(() => {
+    setMode("play");
+    setT(0);
+  }, [name]);
+  useEffect(() => {
+    if (!ex || mode !== "play") return;
+    const dur = ex.dur || 2200;
+    let s0 = null,
+      id = 0;
+    const step = ts => {
+      if (s0 === null) s0 = ts;
+      const e = (ts - s0) % (dur * 2) / dur;
+      const raw = e <= 1 ? e : 2 - e;
+      setT(raw < 0.5 ? 2 * raw * raw : 1 - (2 - 2 * raw) * (2 - 2 * raw) / 2);
+      id = requestAnimationFrame(step);
+    };
+    id = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(id);
+  }, [ex, mode, name]);
+  if (!ex) return null;
+  const pos = mode === "start" ? 0 : mode === "end" ? 1 : t;
+  const shapes = figShapes(ex, pos);
+  const lab = ex.lab || ["Start", "Finish"];
+  const phase = pos > 0.5 ? 1 : 0;
+  const btn = on => ({
+    flex: 1,
+    padding: "7px 0",
+    borderRadius: 4,
+    fontSize: 12,
+    fontWeight: 800,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    fontFamily: FONT_HEAD,
+    backgroundColor: on ? accent : "var(--card)",
+    color: on ? "#0B0F14" : "var(--muted)",
+    border: "1px solid " + (on ? accent : "var(--border)")
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mt-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      backgroundColor: "var(--card)",
+      border: "1px solid var(--border)",
+      borderRadius: 6,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "absolute uppercase font-bold tracking-widest",
+    style: {
+      top: 8,
+      left: 10,
+      fontSize: 11,
+      color: accent,
+      letterSpacing: "0.12em"
+    }
+  }, lab[phase]), /*#__PURE__*/React.createElement("svg", {
+    viewBox: "0 0 " + FIGV.w + " " + FIGV.h,
+    width: "100%",
+    style: {
+      display: "block"
+    },
+    "aria-label": name + " movement diagram"
+  }, shapes.map((s, i) => figEl(s, i, accent)))), /*#__PURE__*/React.createElement("div", {
+    className: "mt-2 flex gap-2"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMode(mode === "play" ? "start" : "play"),
+    style: btn(mode === "play"),
+    className: "active:opacity-70"
+  }, mode === "play" ? "▮▮ Playing" : "▶ Play"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMode("start"),
+    style: btn(mode === "start"),
+    className: "active:opacity-70"
+  }, "Start"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setMode("end"),
+    style: btn(mode === "end"),
+    className: "active:opacity-70"
+  }, "Finish")));
+}
+// <<<FIGURE_COMPONENT_END>>>
+
 // ============================================================
 // EXERCISE GUIDE (full-screen overlay — preserves workout state)
 // ============================================================
@@ -5354,7 +7953,10 @@ function ExerciseGuide({
     style: {
       color: "var(--text2)"
     }
-  }, equipment)), g ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, equipment)), /*#__PURE__*/React.createElement(ExerciseFigure, {
+    name: name,
+    accent: c
+  }), g ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "mt-6"
   }, /*#__PURE__*/React.createElement(SectionTitle, null, "How To"), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-2"
