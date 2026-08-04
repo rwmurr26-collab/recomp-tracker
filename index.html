@@ -3017,7 +3017,8 @@ function latestBMR(checkins) {
 }
 // Auto calorie + protein targets from goal type, bodyweight, and BMR
 function computeNutrition(settings, checkins) {
-  const wt = checkins && checkins.length ? checkins[checkins.length - 1].weight : settings.startWeight;
+  const wtRaw = checkins && checkins.length ? checkins[checkins.length - 1].weight : settings.startWeight;
+  const wt = wtRaw > 0 ? wtRaw : settings.startWeight > 0 ? settings.startWeight : 170; // guard blank first-run data
   const bmr = latestBMR(checkins);
   const maintenance = bmr ? Math.round(bmr * 1.45) : Math.round(wt * 13); // lightly active
   const adj = {
@@ -5578,7 +5579,8 @@ function CheckIn({
     const entry = {};
     BODYCOMP_METRICS.forEach(m => {
       const num = parseFloat(vals[m.key]);
-      entry[m.key] = isNaN(num) ? last[m.key] : num;
+      if (!isNaN(num)) entry[m.key] = num; // what they typed
+      else if (last && last[m.key] != null) entry[m.key] = last[m.key]; // carry over last week's (blank on first run)
     });
     onSave(entry);
   };
@@ -5821,9 +5823,9 @@ function NumberRow({
   value,
   onCommit
 }) {
-  const [txt, setTxt] = useState(String(value));
+  const [txt, setTxt] = useState(value == null || value === "" ? "" : String(value));
   useEffect(() => {
-    setTxt(String(value));
+    setTxt(value == null || value === "" ? "" : String(value));
   }, [value]);
   return /*#__PURE__*/React.createElement("div", {
     className: "flex items-center justify-between px-4 py-3",
@@ -7227,10 +7229,10 @@ function Onboarding({
     goalType: settings.goalType || "Recomp",
     daysPerWeek: settings.daysPerWeek || 4,
     experience: settings.experience || "Beginner",
-    startWeight: settings.startWeight,
-    goalWeight: settings.goalWeight,
-    startDate: settings.startDate,
-    targetDate: settings.targetDate
+    startWeight: "",
+    goalWeight: "",
+    startDate: "",
+    targetDate: ""
   });
   const set = (k, v) => setD(p => ({
     ...p,
@@ -7379,7 +7381,7 @@ function Onboarding({
 
   // Step 2: optional body scan — saving OR skipping generates the plan and unlocks the app
   return wrap(/*#__PURE__*/React.createElement(CheckIn, {
-    last: baseline || {},
+    last: {},
     onSave: entry => onComplete(d, entry),
     onCancel: () => onComplete(d, null),
     label: "Step 2 of 2 \xB7 Body scan (optional)",
@@ -7514,22 +7516,29 @@ function App() {
   };
   // First-run welcome flow: capture goal + optional scan, generate the plan, unlock the app
   const completeOnboarding = (draftSettings, scan) => {
+    const today = new Date();
+    const iso = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
     const ns = {
       ...settings,
       ...draftSettings
     };
+    if (!ns.startDate) ns.startDate = iso(today);
+    if (!ns.targetDate) ns.targetDate = iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 56)); // ~8 weeks
+    const scanWeight = scan && scan.weight > 0 ? scan.weight : null;
+    if (!(ns.startWeight > 0) && scanWeight) ns.startWeight = scanWeight;
     setSettings(ns);
-    let nextCheckins = checkins;
-    if (scan && Object.keys(scan).length) {
-      nextCheckins = [...checkins];
-      nextCheckins[0] = {
-        ...(checkins[0] || {
-          date: todayKey()
-        }),
-        ...scan
-      };
-      setCheckins(nextCheckins);
-    }
+    // Fresh starting baseline built ONLY from what the new user entered — no seeded/placeholder data
+    const baseEntry = {
+      date: new Date().toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      }),
+      ...(scan || {})
+    };
+    if (baseEntry.weight == null && ns.startWeight > 0) baseEntry.weight = ns.startWeight; // give Progress a first point
+    const nextCheckins = [baseEntry];
+    setCheckins(nextCheckins);
     const nextDays = generatePlan(ns, prefs, nextCheckins);
     updatePlan(nextDays);
     setOnboarded(true);
