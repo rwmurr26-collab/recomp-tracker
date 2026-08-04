@@ -1782,7 +1782,9 @@ const _FRONTPROPS = {
   handle: 1,
   kb: 1,
   barline: 1,
-  arc: 1
+  arc: 1,
+  band: 1,
+  band2: 1
 };
 function _dumbbell(out, p, ang, s) {
   s = s || 1;
@@ -2053,6 +2055,46 @@ function fprop(pr, J, out) {
         dash: pr.dash
       });
       break;
+    case "band":
+      {
+        const to = fjat(J, pr.to || "wr");
+        const mx = (pr.x + to[0]) / 2,
+          my = (pr.y + to[1]) / 2 + (pr.sag === undefined ? 7 : pr.sag);
+        out.push({
+          k: "path",
+          d: "M" + pr.x + " " + pr.y + " Q" + mx.toFixed(1) + " " + my.toFixed(1) + " " + to[0].toFixed(1) + " " + to[1].toFixed(1),
+          w: 2.5,
+          col: "equip"
+        });
+        break;
+      }
+    case "band2":
+      {
+        const a = fjat(J, pr.a),
+          b = fjat(J, pr.b);
+        const mx = (a[0] + b[0]) / 2,
+          my = (a[1] + b[1]) / 2 + (pr.sag === undefined ? 9 : pr.sag);
+        out.push({
+          k: "path",
+          d: "M" + a[0].toFixed(1) + " " + a[1].toFixed(1) + " Q" + mx.toFixed(1) + " " + my.toFixed(1) + " " + b[0].toFixed(1) + " " + b[1].toFixed(1),
+          w: 2.5,
+          col: "equip"
+        });
+        break;
+      }
+    case "smith":
+      {
+        [pr.x1, pr.x2].forEach(function (x) {
+          out.push({
+            k: "line",
+            a: [x, F],
+            b: [x, pr.top],
+            w: 3,
+            col: "equip"
+          });
+        });
+        break;
+      }
     case "barline":
       {
         const a = fjat(J, pr.a),
@@ -2242,6 +2284,8 @@ function figShapes(ex, t) {
   });
   return out;
 }
+
+// <<<FIGURE_ENGINE_END>>>
 
 // <<<FIGURE_DATA_START>>>
 // ---- Per-exercise poses. start -> end -> back again (looping animation). ----
@@ -4063,6 +4107,498 @@ const EXERCISE_FIG = {
     dur: 800
   }
 };
+
+// <<<FIGURE_DATA_END>>>
+
+// <<<FIGURE_DATA2_START>>>
+// ---- Poses for the bodyweight / band / kettlebell / machine accessories ----
+Object.assign(EXERCISE_FIG, {
+  "Diamond Push-Up": {
+    lab: ["Top", "Chest to hands"],
+    start: {
+      hip: [110, 128],
+      torso: 289,
+      legTo: [156, 146],
+      foot: 150,
+      armTo: [84, 150],
+      armBend: 1
+    },
+    end: {
+      hip: [110, 141],
+      armTo: [84, 150],
+      legTo: [156, 150],
+      armBend: 1
+    },
+    props: _FLOOR,
+    trail: "sh"
+  },
+  "Inverted Row": {
+    lab: ["Arms straight", "Chest to bar"],
+    start: {
+      hip: [100, 128],
+      torso: 285,
+      legTo: [144, 150],
+      foot: 30,
+      armTo: [66, 84],
+      armBend: 1
+    },
+    end: {
+      hip: [100, 112],
+      armTo: [66, 84],
+      legTo: [144, 150],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 46,
+      y: 152,
+      top: 84
+    }, {
+      t: "post",
+      x: 162,
+      y: 152,
+      top: 84
+    }, {
+      t: "beam",
+      x1: 46,
+      x2: 162,
+      y: 84
+    }],
+    trail: "sh"
+  },
+  "Superman": {
+    lab: ["Down", "Lift"],
+    start: {
+      hip: [112, 142],
+      torso: 265,
+      legTo: [158, 150],
+      foot: 120,
+      armTo: [46, 150],
+      armBend: -1
+    },
+    end: {
+      torso: 272,
+      legTo: [158, 126],
+      armTo: [50, 122]
+    },
+    props: _FLOOR,
+    trail: "wr"
+  },
+  "Bodyweight Squat": {
+    lab: ["Stand tall", "Squat down"],
+    start: {
+      hip: [104, 99],
+      torso: 5,
+      legTo: [104, 147],
+      armTo: [112, 100],
+      armBend: -1
+    },
+    end: {
+      hip: [100, 124],
+      torso: 30,
+      legTo: [104, 147],
+      armTo: [142, 98]
+    },
+    props: _FLOOR,
+    trail: "hip"
+  },
+  "Reverse Lunge": {
+    lab: ["Stand tall", "Step back"],
+    start: {
+      hip: [100, 100],
+      torso: 4,
+      legTo: [106, 148],
+      legTo2: [96, 148],
+      armTo: [104, 102],
+      armBend: 1
+    },
+    end: {
+      hip: [100, 122],
+      torso: 8,
+      legTo: [112, 148],
+      legTo2: [70, 142],
+      foot2: 150,
+      legBend2: 1,
+      armTo: [106, 124]
+    },
+    props: _FLOOR,
+    trail: "hip"
+  },
+  "Single-Leg RDL (Bodyweight)": {
+    lab: ["Stand tall", "Hinge over"],
+    start: {
+      hip: [104, 99],
+      torso: 3,
+      legTo: [104, 147],
+      leg2: [178, 178],
+      armTo: [110, 101],
+      armBend: 1
+    },
+    end: {
+      hip: [92, 102],
+      torso: 68,
+      legTo: [104, 147],
+      leg2: [283, 283],
+      armTo: [126, 124]
+    },
+    props: _FLOOR,
+    trail: "wr"
+  },
+  "Kettlebell Swing": {
+    lab: ["Hike back", "Snap to chest"],
+    start: {
+      hip: [92, 104],
+      torso: 62,
+      legTo: [104, 147],
+      armTo: [122, 124],
+      armBend: 1
+    },
+    end: {
+      hip: [104, 99],
+      torso: 2,
+      legTo: [104, 147],
+      armTo: [140, 66]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "kb",
+      at: "wr"
+    }],
+    trail: "wr",
+    bow: 0.24
+  },
+  "Kettlebell Front Squat": {
+    lab: ["Racked", "Squat down"],
+    start: {
+      hip: [104, 99],
+      torso: 5,
+      legTo: [104, 147],
+      armTo: [112, 82],
+      armBend: -1
+    },
+    end: {
+      hip: [100, 124],
+      torso: 30,
+      legTo: [104, 147],
+      armTo: [124, 104]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "kb",
+      at: "wr"
+    }],
+    trail: "hip"
+  },
+  "Kettlebell Clean & Press": {
+    lab: ["Racked", "Overhead"],
+    start: {
+      hip: [104, 99],
+      torso: 2,
+      legTo: [104, 147],
+      armTo: [114, 80],
+      armBend: -1
+    },
+    end: {
+      armTo: [106, 34]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "kb",
+      at: "wr"
+    }],
+    trail: "wr"
+  },
+  "Band Chest Press": {
+    lab: ["Hands at chest", "Press out"],
+    start: {
+      hip: [102, 100],
+      torso: 6,
+      legTo: [104, 148],
+      legTo2: [90, 150],
+      armTo: [94, 86],
+      armBend: 1
+    },
+    end: {
+      armTo: [138, 80],
+      armBend: -1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 14,
+      y: 152,
+      top: 64
+    }, {
+      t: "band",
+      x: 14,
+      y: 70,
+      to: "wr",
+      sag: 5
+    }],
+    trail: "wr"
+  },
+  "Banded Row": {
+    lab: ["Arms forward", "Pull to ribs"],
+    start: {
+      hip: [102, 100],
+      torso: 6,
+      legTo: [104, 148],
+      legTo2: [90, 150],
+      armTo: [138, 88],
+      armBend: -1
+    },
+    end: {
+      armTo: [104, 94],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 206,
+      y: 152,
+      top: 88
+    }, {
+      t: "band",
+      x: 206,
+      y: 94,
+      to: "wr",
+      sag: 6
+    }],
+    trail: "wr"
+  },
+  "Band Pull-Apart": {
+    front: true,
+    lab: ["Arms forward", "Pull apart"],
+    start: {
+      hip: [104, 99],
+      torso: 0,
+      legTo: [112, 150],
+      legTo2: [96, 150],
+      armTo: [122, 70],
+      armTo2: [86, 70],
+      armBend: -1,
+      armBend2: 1
+    },
+    end: {
+      armTo: [152, 74],
+      armTo2: [56, 74]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "band2",
+      a: "wr",
+      b: "wrF",
+      sag: 6
+    }],
+    trail: "wr"
+  },
+  "Banded Squat": {
+    lab: ["Stand tall", "Squat down"],
+    start: {
+      hip: [104, 99],
+      torso: 5,
+      legTo: [104, 147],
+      armTo: [110, 74],
+      armBend: -1
+    },
+    end: {
+      hip: [100, 124],
+      torso: 30,
+      legTo: [104, 147],
+      armTo: [120, 100]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "band",
+      x: 104,
+      y: 149,
+      to: "wr",
+      sag: 0
+    }],
+    trail: "hip"
+  },
+  "Band Bicep Curl": {
+    lab: ["Arms down", "Curl up"],
+    start: {
+      hip: [104, 99],
+      torso: 0,
+      legTo: [104, 147],
+      armTo: [106, 101],
+      armBend: -1
+    },
+    end: {
+      armTo: [117, 79]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "band",
+      x: 104,
+      y: 149,
+      to: "wr",
+      sag: 0
+    }],
+    trail: "wr"
+  },
+  "EZ-Bar Curl": {
+    lab: ["Arms down", "Curl up"],
+    start: {
+      hip: [104, 99],
+      torso: 0,
+      legTo: [104, 147],
+      armTo: [110, 101],
+      armBend: -1
+    },
+    end: {
+      armTo: [119, 81]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 9
+    }],
+    trail: "wr"
+  },
+  "Smith Machine Squat": {
+    lab: ["Stand tall", "Hit depth"],
+    start: {
+      hip: [104, 99],
+      torso: 5,
+      legTo: [104, 147],
+      armTo: [96, 68],
+      armBend: -1
+    },
+    end: {
+      hip: [100, 124],
+      torso: 35,
+      legTo: [104, 147],
+      armTo: [112, 98]
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "smith",
+      x1: 62,
+      x2: 150,
+      top: 26
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 12
+    }],
+    trail: "hip"
+  },
+  "Smith Machine Bench Press": {
+    lab: ["Lockout", "Bar to chest"],
+    start: {
+      hip: [116, 112],
+      torso: 268,
+      legTo: [140, 150],
+      armTo: [82, 77],
+      armBend: 1
+    },
+    end: {
+      armTo: [92, 96],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "smith",
+      x1: 66,
+      x2: 100,
+      top: 30
+    }, {
+      t: "bench",
+      x: 44,
+      y: 118,
+      w: 106
+    }, {
+      t: "plate",
+      at: "wr",
+      r: 11
+    }],
+    trail: "wr"
+  },
+  "Dips": {
+    lab: ["Top", "Bottom"],
+    start: {
+      hip: [104, 86],
+      torso: 355,
+      leg: [200, 150],
+      armTo: [98, 88],
+      armBend: 1
+    },
+    end: {
+      hip: [104, 106],
+      torso: 350,
+      leg: [200, 150],
+      armTo: [98, 88],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "post",
+      x: 72,
+      y: 152,
+      top: 88,
+      w: 4
+    }, {
+      t: "post",
+      x: 136,
+      y: 152,
+      top: 88,
+      w: 4
+    }, {
+      t: "beam",
+      x1: 72,
+      x2: 136,
+      y: 88
+    }],
+    trail: "hip"
+  },
+  "Box Jump": {
+    lab: ["Load up", "Land on the box"],
+    start: {
+      hip: [80, 116],
+      torso: 25,
+      legTo: [84, 148],
+      armTo: [62, 108],
+      armBend: 1
+    },
+    end: {
+      hip: [126, 96],
+      torso: 14,
+      legTo: [130, 128],
+      armTo: [146, 84],
+      armBend: 1
+    },
+    props: [{
+      t: "floor"
+    }, {
+      t: "box",
+      x: 116,
+      y: 128,
+      w: 52,
+      h: 24
+    }],
+    trail: "hip",
+    bow: 0.28
+  }
+});
+// <<<FIGURE_DATA2_END>>>
 
 // ---- How-to instructions + form cues for every movement ----
 const EXERCISE_GUIDE = {
@@ -7727,6 +8263,88 @@ function SessionDetail({
     }
   }, "Per-set detail wasn't recorded for this session. Exercises: ", (log.exercises || []).join(", ") || "—", ".")));
 }
+
+// <<<GUIDE_EXTRA_START>>>
+// ---- How-to instructions for the bodyweight / band / kettlebell / machine accessories ----
+Object.assign(EXERCISE_GUIDE, {
+  "Diamond Push-Up": {
+    steps: ["Set up in a push-up position with your hands together under your chest, thumbs and index fingers forming a triangle.", "Lower your chest toward your hands, keeping your elbows tucked close to your ribs.", "Press back up to straight arms without letting your hips sag."],
+    tips: ["Elbows brush your sides — flaring them out takes the work off your triceps.", "Too hard on the floor? Do them with your hands on a bench first."]
+  },
+  "Inverted Row": {
+    steps: ["Set a bar at about waist height (or lie under a sturdy table) and grab it slightly wider than your shoulders.", "Hang underneath with your body straight and heels on the floor.", "Pull your chest to the bar, driving your elbows back, then lower under control."],
+    tips: ["Squeeze your glutes so your body stays in one straight line.", "Make it easier by bending your knees, harder by walking your feet further out."]
+  },
+  "Superman": {
+    steps: ["Lie face-down with your arms stretched out overhead and legs straight.", "Lift your arms, chest and legs off the floor at the same time.", "Hold for a second at the top, then lower everything back down."],
+    tips: ["Lift with your back and glutes — don't crank your neck up.", "Small range is fine; a couple of inches done well beats heaving."]
+  },
+  "Bodyweight Squat": {
+    steps: ["Stand with your feet about shoulder-width, toes turned slightly out.", "Sit down and back until your thighs are about parallel, reaching your arms forward for balance.", "Drive through your whole foot to stand back up."],
+    tips: ["Keep your chest up and let your knees track over your toes.", "This is the pattern for every squat you'll load later — groove it here."]
+  },
+  "Reverse Lunge": {
+    steps: ["Stand tall with your feet together.", "Step one foot straight back and lower until both knees are at about 90°.", "Push through your front heel to step back to standing."],
+    tips: ["Easier on the knees than a forward lunge — most of the work stays on the front leg.", "Keep your torso upright; don't lean over the front thigh."]
+  },
+  "Single-Leg RDL (Bodyweight)": {
+    steps: ["Stand on one leg with a soft bend in that knee.", "Hinge at the hip, reaching your hands toward the floor as your free leg extends straight behind you.", "Squeeze your glute to pull yourself back upright."],
+    tips: ["Hips stay square to the floor — don't let the back hip roll open.", "Hold a wall or rack with one hand until your balance settles."]
+  },
+  "Kettlebell Swing": {
+    steps: ["Stand with the bell a foot in front of you, hinge over and hike it back between your legs.", "Snap your hips forward hard so the bell floats up to about chest height.", "Let it swing back down, hinging again as it passes your legs."],
+    tips: ["This is a hip snap, not a front raise — your arms are just ropes.", "Keep your back flat and your ribs down the whole time."]
+  },
+  "Kettlebell Front Squat": {
+    steps: ["Hold the bell against your chest with both hands, elbows tucked in.", "Sit down and back until your thighs are about parallel.", "Drive up through your whole foot, keeping the bell tight to your chest."],
+    tips: ["The front load helps you stay upright — let it.", "Elbows stay inside your knees at the bottom."]
+  },
+  "Kettlebell Clean & Press": {
+    steps: ["Clean the bell to the rack position at your shoulder, elbow tucked and wrist straight.", "Brace your core and press it straight overhead until your arm is locked out.", "Lower back to the rack under control, then to the floor between sets."],
+    tips: ["Keep the bell close to your body on the clean so it doesn't bang your forearm.", "Squeeze your glutes on the press so you don't lean back."]
+  },
+  "Band Chest Press": {
+    steps: ["Anchor the band behind you at chest height and hold an end in each hand.", "Start with your hands at your chest, elbows back and a step forward for tension.", "Press your hands forward until your arms are straight, then return slowly."],
+    tips: ["Step further from the anchor to make it harder.", "Keep your wrists straight and your shoulders down."]
+  },
+  "Banded Row": {
+    steps: ["Anchor the band in front of you at about chest height and hold an end in each hand.", "Step back for tension with your arms extended forward.", "Pull your hands to your ribs, driving your elbows back and squeezing your shoulder blades."],
+    tips: ["Chest up, torso still — don't rock back to move the band.", "Pause for a beat with your shoulder blades pinched."]
+  },
+  "Band Pull-Apart": {
+    steps: ["Hold a band with both hands, arms straight out in front at shoulder height.", "Pull your hands apart until the band touches your chest.", "Return slowly to the start without letting it snap back."],
+    tips: ["Great warm-up for pressing days and for posture.", "Keep your arms straight — the movement comes from your shoulder blades."]
+  },
+  "Banded Squat": {
+    steps: ["Stand on the middle of the band and bring the ends up to your shoulders.", "Sit down and back until your thighs are about parallel.", "Drive up through your whole foot against the band's pull."],
+    tips: ["Tension is hardest at the top — push all the way to standing.", "Keep the band ends pinned at your shoulders so they don't slip."]
+  },
+  "Band Bicep Curl": {
+    steps: ["Stand on the middle of the band and hold an end in each hand, palms forward.", "Curl your hands up toward your shoulders, keeping your elbows at your sides.", "Lower slowly against the band's tension."],
+    tips: ["The slow lower is where most of the work is — don't rush it.", "Widen your stance on the band for more resistance."]
+  },
+  "EZ-Bar Curl": {
+    steps: ["Grab the EZ bar on the angled sections, palms up, arms hanging.", "Curl the bar up, keeping your elbows pinned to your sides.", "Lower all the way down under control."],
+    tips: ["The angled grip is easier on your wrists than a straight bar.", "No swinging — if your back is moving, drop the weight."]
+  },
+  "Smith Machine Squat": {
+    steps: ["Set the bar on your upper back and unlock it with a small wrist turn.", "Feet slightly in front of the bar, sit down and back until your thighs are about parallel.", "Drive up and re-rack by twisting the bar into the hooks."],
+    tips: ["The fixed path makes this a good place to learn depth safely.", "Set the safety stops just below your bottom position."]
+  },
+  "Smith Machine Bench Press": {
+    steps: ["Lie on the bench so the bar lines up over your mid-chest, then unhook it.", "Lower to your chest with your elbows at about 45°.", "Press back up to straight arms and re-hook at the end of the set."],
+    tips: ["Slide the bench until the bar path hits your chest, not your throat.", "Great for pressing hard without a spotter — set the stops first."]
+  },
+  "Dips": {
+    steps: ["Grip the parallel bars and press up to straight arms with your feet off the floor.", "Lower until your upper arms are about parallel to the floor.", "Press back up to lockout without swinging."],
+    tips: ["Stay fairly upright to hit the triceps; lean forward to hit more chest.", "Use the assisted-dip machine or a band if full bodyweight is too much."]
+  },
+  "Box Jump": {
+    steps: ["Stand a short step from the box, dip your hips and swing your arms back.", "Jump up and land softly on top with both feet flat and knees bent.", "Stand up tall, then step down one foot at a time."],
+    tips: ["Always step down — jumping down beats up your knees for no benefit.", "Pick a box you can land on with your feet flat, not one you have to tuck for."]
+  }
+});
+// <<<GUIDE_EXTRA_END>>>
 
 // <<<FIGURE_COMPONENT_START>>>
 // ============================================================
