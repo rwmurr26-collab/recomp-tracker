@@ -8121,6 +8121,178 @@ function Progress({
   }, "Your data lives on this device. Export a backup before switching phones or clearing Safari \u2014 import it to restore everything."));
 }
 
+// <<<SWIPE_START>>>
+// ---- Interactive swipe-to-go-back: the page tracks your thumb, then glides ----
+const _SW_EASE = "transform .28s cubic-bezier(.22,.61,.36,1), opacity .28s cubic-bezier(.22,.61,.36,1)";
+function _swReduce() {
+  try {
+    return typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch (e) {
+    return false;
+  }
+}
+function _swWidth() {
+  return typeof window !== "undefined" && window.innerWidth || 390;
+}
+// don't hijack the gesture inside a horizontally scrollable strip (filter chips, carousels)
+function _swInHScroller(node) {
+  let el = node;
+  while (el && typeof document !== "undefined" && el !== document.body) {
+    try {
+      const st = window.getComputedStyle(el);
+      if ((st.overflowX === "auto" || st.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 4) return true;
+    } catch (e) {/* ignore */}
+    el = el.parentElement;
+  }
+  return false;
+}
+// Returns { ref, handlers }. Put `ref` on the element that should slide and
+// `handlers` on whatever should listen for the gesture (often an ancestor).
+function useSwipeBack(onBack, opts) {
+  const options = opts || {};
+  const node = useRef(null);
+  const g = useRef(null);
+  const on = useRef(true);
+  on.current = options.enabled !== false;
+  const paint = (x, animate) => {
+    const n = node.current;
+    if (!n) return;
+    n.style.transition = animate ? _SW_EASE : "none";
+    if (x <= 0.05 && !animate) {
+      n.style.transform = "";
+      n.style.opacity = "";
+      n.style.willChange = "";
+      return;
+    }
+    n.style.transform = "translate3d(" + x.toFixed(1) + "px,0,0)";
+    n.style.opacity = String(Math.max(0, 1 - x / _swWidth() * 0.8));
+  };
+  const settle = () => {
+    const n = node.current;
+    if (!n) return;
+    n.style.transition = "";
+    n.style.transform = "";
+    n.style.opacity = "";
+    n.style.willChange = "";
+  };
+
+  // slide in when this screen first appears
+  useEffect(() => {
+    if (!options.enter || _swReduce()) return;
+    const n = node.current;
+    if (!n) return;
+    n.style.transition = "none";
+    n.style.transform = "translate3d(" + Math.round(_swWidth() * 0.3) + "px,0,0)";
+    n.style.opacity = "0.35";
+    let id2 = 0;
+    const id1 = requestAnimationFrame(() => {
+      const m = node.current;
+      if (!m) return;
+      m.style.transition = _SW_EASE;
+      m.style.transform = "translate3d(0,0,0)";
+      m.style.opacity = "1";
+      id2 = setTimeout(() => {
+        const q = node.current;
+        if (q) {
+          q.style.transition = "";
+          q.style.transform = "";
+          q.style.opacity = "";
+        }
+      }, 320);
+    });
+    return () => {
+      cancelAnimationFrame(id1);
+      clearTimeout(id2);
+    };
+  }, []);
+  const onTouchStart = e => {
+    if (!on.current || !e.touches || e.touches.length !== 1) {
+      g.current = null;
+      return;
+    }
+    const t = e.touches[0];
+    g.current = {
+      x: t.clientX,
+      y: t.clientY,
+      t: Date.now(),
+      axis: null,
+      target: e.target,
+      dx: 0
+    };
+  };
+  const onTouchMove = e => {
+    const s = g.current;
+    if (!s || !on.current) return;
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    const dx = t.clientX - s.x,
+      dy = t.clientY - s.y;
+    s.dx = dx;
+    if (s.axis === null) {
+      if (Math.abs(dx) < 9 && Math.abs(dy) < 9) return; // too small to call yet
+      s.axis = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.2 && !_swInHScroller(s.target) ? "x" : "y";
+      if (s.axis === "x" && node.current) node.current.style.willChange = "transform, opacity";
+    }
+    if (s.axis !== "x") return;
+    const w = _swWidth(),
+      soft = w * 0.55;
+    // 1:1 with the thumb, then rubber-bands so it can't fly off
+    paint(dx <= soft ? Math.max(0, dx) : soft + (dx - soft) * 0.35, false);
+  };
+  const onTouchEnd = e => {
+    const s = g.current;
+    g.current = null;
+    if (!s || s.axis !== "x" || !on.current) return;
+    const ch = e.changedTouches && e.changedTouches[0];
+    const dx = ch ? ch.clientX - s.x : s.dx;
+    const w = _swWidth();
+    const v = dx / Math.max(1, Date.now() - s.t); // px per ms
+    const commit = dx > w * 0.32 || v > 0.45 && dx > 56;
+    if (!commit) {
+      paint(0, true);
+      setTimeout(settle, 300);
+      return;
+    }
+    const n = node.current;
+    if (!n || _swReduce()) {
+      onBack();
+      return;
+    }
+    n.style.transition = "transform .2s ease-out, opacity .2s ease-out";
+    n.style.transform = "translate3d(" + w + "px,0,0)";
+    n.style.opacity = "0";
+    setTimeout(() => {
+      onBack();
+      if (options.unmounts) return; // overlay disappears; nothing left to reset
+      requestAnimationFrame(() => {
+        const m = node.current;
+        if (!m) return;
+        m.style.transition = "none";
+        m.style.transform = "translate3d(-24px,0,0)";
+        m.style.opacity = "0";
+        requestAnimationFrame(() => {
+          const q = node.current;
+          if (!q) return;
+          q.style.transition = _SW_EASE;
+          q.style.transform = "translate3d(0,0,0)";
+          q.style.opacity = "1";
+          setTimeout(settle, 320);
+        });
+      });
+    }, 195);
+  };
+  return {
+    ref: node,
+    handlers: {
+      onTouchStart: onTouchStart,
+      onTouchMove: onTouchMove,
+      onTouchEnd: onTouchEnd,
+      onTouchCancel: onTouchEnd
+    }
+  };
+}
+// <<<SWIPE_END>>>
+
 // ============================================================
 // SESSION DETAIL — read-only recap of a past workout
 // ============================================================
@@ -8129,11 +8301,17 @@ function SessionDetail({
   onClose,
   onOpenGuide
 }) {
+  const swipe = useSwipeBack(onClose, {
+    enter: true,
+    unmounts: true
+  });
   if (!log) return null;
   const prs = log.prs || [];
   const meta = [log.date, log.gym, log.duration, `${log.sets} sets`, log.rating ? `${log.rating}/10` : null, log.partial ? "partial" : null].filter(Boolean).join(" · ");
   return /*#__PURE__*/React.createElement("div", {
     className: "fixed inset-0 z-50",
+    ref: swipe.ref,
+    ...swipe.handlers,
     style: {
       backgroundColor: "var(--bg)",
       overflowY: "auto"
@@ -8508,6 +8686,10 @@ function ExerciseGuide({
   name,
   onClose
 }) {
+  const swipe = useSwipeBack(onClose, {
+    enter: true,
+    unmounts: true
+  });
   const g = EXERCISE_GUIDE[name];
   const cat = CATALOG.find(e => e.name === name);
   const muscle = cat ? cat.muscle : "";
@@ -8516,6 +8698,8 @@ function ExerciseGuide({
   const c = MUSCLE_COLORS[muscle] || BLUE;
   return /*#__PURE__*/React.createElement("div", {
     className: "fixed inset-0 z-50",
+    ref: swipe.ref,
+    ...swipe.handlers,
     style: {
       backgroundColor: "var(--bg)",
       overflowY: "auto"
@@ -11095,57 +11279,20 @@ function App() {
   const bProgress = bSpan > 0 ? Math.max(0, Math.min(100, (settings.startWeight - curWeight) / bSpan * 100)) : 0;
   const nutrition = computeNutrition(settings, checkins);
 
-  // Swipe right anywhere → jump back to the Home dashboard
-  const swipeRef = useRef(null);
-  const inHScroller = node => {
-    let el = node;
-    while (el && el !== document.body) {
-      try {
-        const st = window.getComputedStyle(el);
-        if ((st.overflowX === "auto" || st.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 4) return true;
-      } catch (e) {/* ignore */}
-      el = el.parentElement;
-    }
-    return false;
-  };
-  const onTouchStart = e => {
-    if (e.touches && e.touches.length === 1) {
-      const t = e.touches[0];
-      swipeRef.current = {
-        x: t.clientX,
-        y: t.clientY,
-        t: Date.now(),
-        target: e.target
-      };
-    } else swipeRef.current = null;
-  };
-  const onTouchEnd = e => {
-    const s = swipeRef.current;
-    swipeRef.current = null;
-    if (!s) return;
-    if (menuOpen || guide || detailLog || showTest || !onboarded) return; // don't fight open overlays
-    if (tab === "dashboard") return; // already home
-    if (inHScroller(s.target)) return; // let carousels/filters scroll freely
-    const ch = e.changedTouches && e.changedTouches[0];
-    if (!ch) return;
-    const dx = ch.clientX - s.x,
-      dy = ch.clientY - s.y,
-      dt = Date.now() - s.t;
-    if (dx > 80 && Math.abs(dx) > Math.abs(dy) * 1.8 && dt < 800) {
-      // clear, fast rightward swipe
-      setTab("dashboard");
-      setToast("🏠 Home");
-      setTimeout(() => setToast(""), 1200);
-    }
-  };
+  // <<<SWIPE_APP_START>>>
+  // Swipe right anywhere → drag the page away and land back on Home
+  const pageSwipe = useSwipeBack(() => setTab("dashboard"), {
+    enabled: onboarded && tab !== "dashboard" && !menuOpen && !guide && !detailLog && !showTest
+  });
+  // <<<SWIPE_APP_END>>>
+
   const activeTheme = resolveTheme(settings.theme || "dark", nowHour);
   const pal = activeTheme === "light" ? LIGHT_PAL : DARK_PAL;
   useEffect(() => {
     if (typeof document !== "undefined") document.body.style.backgroundColor = pal.bg;
   }, [pal.bg]);
   return /*#__PURE__*/React.createElement("div", {
-    onTouchStart: onTouchStart,
-    onTouchEnd: onTouchEnd,
+    ...pageSwipe.handlers,
     style: {
       ...themeVarsFor(pal),
       backgroundColor: "var(--bg)",
@@ -11154,6 +11301,8 @@ function App() {
       color: "var(--text)",
       paddingTop: "env(safe-area-inset-top)"
     }
+  }, /*#__PURE__*/React.createElement("div", {
+    ref: pageSwipe.ref
   }, /*#__PURE__*/React.createElement("div", {
     className: "px-4 pt-4 pb-4",
     style: {
@@ -11340,7 +11489,7 @@ function App() {
     nutrition: nutrition,
     log: nutritionLog,
     onLog: logNutrition
-  }), toast && /*#__PURE__*/React.createElement("div", {
+  })), toast && /*#__PURE__*/React.createElement("div", {
     className: "fixed left-4 right-4 z-50 px-4 py-3 text-center text-sm font-bold",
     style: {
       bottom: 24,
