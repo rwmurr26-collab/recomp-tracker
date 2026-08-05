@@ -16,7 +16,7 @@
  *     fresh deploy shows the moment there is any connectivity, and airplane mode
  *     still falls back to the cached copy.
  */
-const VERSION = "a08c8970f2cd";
+const VERSION = "863b012c0438";
 const CACHE = "recomp-" + VERSION;
 const PRECACHE = ["./","./index.html","./manifest.json","./icon-192.png","./icon-512.png","./icon-180.png"];
 const NAV_TIMEOUT_MS = 2500;
