@@ -8184,26 +8184,33 @@ function useSwipeBack(onBack, opts) {
     n.style.transition = "none";
     n.style.transform = "translate3d(" + Math.round(_swWidth() * 0.3) + "px,0,0)";
     n.style.opacity = "0.35";
-    let id2 = 0;
-    const id1 = requestAnimationFrame(() => {
+    // timers, not rAF: rAF is paused while the app is backgrounded, which would
+    // otherwise strand the screen mid-animation
+    const id1 = setTimeout(() => {
       const m = node.current;
       if (!m) return;
       m.style.transition = _SW_EASE;
       m.style.transform = "translate3d(0,0,0)";
       m.style.opacity = "1";
-      id2 = setTimeout(() => {
-        const q = node.current;
-        if (q) {
-          q.style.transition = "";
-          q.style.transform = "";
-          q.style.opacity = "";
-        }
-      }, 320);
-    });
+    }, 16);
+    const id2 = setTimeout(settle, 360);
     return () => {
-      cancelAnimationFrame(id1);
+      clearTimeout(id1);
       clearTimeout(id2);
     };
+  }, []);
+
+  // coming back from the background can strand a half-finished gesture — clear it
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        g.current = null;
+        settle();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
   const onTouchStart = e => {
     if (!on.current || !e.touches || e.touches.length !== 1) {
@@ -8264,21 +8271,20 @@ function useSwipeBack(onBack, opts) {
     setTimeout(() => {
       onBack();
       if (options.unmounts) return; // overlay disappears; nothing left to reset
-      requestAnimationFrame(() => {
-        const m = node.current;
-        if (!m) return;
-        m.style.transition = "none";
-        m.style.transform = "translate3d(-24px,0,0)";
-        m.style.opacity = "0";
-        requestAnimationFrame(() => {
-          const q = node.current;
-          if (!q) return;
-          q.style.transition = _SW_EASE;
-          q.style.transform = "translate3d(0,0,0)";
-          q.style.opacity = "1";
-          setTimeout(settle, 320);
-        });
-      });
+      const m = node.current;
+      if (!m) return;
+      m.style.transition = "none";
+      m.style.transform = "translate3d(-24px,0,0)";
+      m.style.opacity = "0";
+      setTimeout(() => {
+        const q = node.current;
+        if (!q) return;
+        q.style.transition = _SW_EASE;
+        q.style.transform = "translate3d(0,0,0)";
+        q.style.opacity = "1";
+      }, 16);
+      // hard safety net: whatever happened above, never leave the page hidden
+      setTimeout(settle, 400);
     }, 195);
   };
   return {
