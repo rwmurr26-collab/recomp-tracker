@@ -6048,8 +6048,8 @@ const DEFAULT_SETTINGS = {
   restSound: true,
   haptics: true,
   // buzz on set-complete and rest-timer-done (no-op where unsupported, e.g. iOS Safari)
-  theme: "dark",
-  // "light" | "dark" | "auto"
+  theme: "auto",
+  // "light" | "dark" | "auto" — follows the clock by default
   goalType: "Recomp",
   // Fat Loss | Muscle | Recomp | Strength
   daysPerWeek: 4,
@@ -10475,7 +10475,7 @@ function PlanSettings({
       light: "Light",
       dark: "Dark",
       auto: "Auto"
-    }[s.theme || "dark"],
+    }[s.theme || "auto"],
     onPick: v => set("theme", v.toLowerCase())
   }), /*#__PURE__*/React.createElement("div", {
     className: "text-xs mb-5",
@@ -10483,7 +10483,7 @@ function PlanSettings({
       color: "var(--muted2)",
       lineHeight: 1.5
     }
-  }, (s.theme || "dark") === "auto" ? "Auto follows the clock — light during the day, dark from 7pm to 7am." : "Pick a look, or choose Auto to switch automatically with the time of day."), /*#__PURE__*/React.createElement("div", {
+  }, (s.theme || "auto") === "auto" ? "Auto follows the clock — light during the day, dark from 7pm to 7am." : "Pick a look, or choose Auto to switch automatically with the time of day."), /*#__PURE__*/React.createElement("div", {
     className: "text-xs uppercase font-bold tracking-widest mb-2",
     style: {
       color: "var(--muted)"
@@ -11719,10 +11719,20 @@ function App() {
   const [prefs, setPrefs] = useState(() => loadStore()?.prefs || {}); // exercise name -> like score (+/-)
   const [gyms, setGyms] = useState(() => migrateGyms(loadStore()?.gyms)); // saved equipment presets (auto-upgraded)
   const [activeGymId, setActiveGymId] = useState(() => loadStore()?.activeGymId || "home"); // where you're training now
-  const [settings, setSettings] = useState(() => ({
-    ...DEFAULT_SETTINGS,
-    ...(loadStore()?.settings || {})
-  })); // editable settings
+  const [settings, setSettings] = useState(() => {
+    const merged = {
+      ...DEFAULT_SETTINGS,
+      ...(loadStore()?.settings || {})
+    }; // editable settings
+    // One-time: installs from before Auto was the default had "dark" baked in and
+    // saved. Flip a still-default "dark" to "auto" once. The flag makes it a
+    // single migration, so choosing Dark later on stays Dark.
+    if (!merged.themeAutoDefaulted) {
+      if (merged.theme === "dark") merged.theme = "auto";
+      merged.themeAutoDefaulted = true;
+    }
+    return merged;
+  });
   const [plan, setPlan] = useState(() => loadStore()?.plan || DEFAULT_PLAN_DAYS); // editable training split
   const [nutritionLog, setNutritionLog] = useState(() => loadStore()?.nutritionLog || {}); // date -> {calories,protein,carbs,fat}
   // First-run gate: brand-new install shows the welcome flow; existing users skip it
@@ -12179,7 +12189,7 @@ function App() {
   });
   // <<<SWIPE_APP_END>>>
 
-  const activeTheme = resolveTheme(settings.theme || "dark", nowHour);
+  const activeTheme = resolveTheme(settings.theme || "auto", nowHour);
   const pal = activeTheme === "light" ? LIGHT_PAL : DARK_PAL;
   useEffect(() => {
     if (typeof document !== "undefined") document.body.style.backgroundColor = pal.bg;
