@@ -315,6 +315,7 @@ function(a,b,c){if(!Vd(b))throw Error(m(200));return Wd(null,a,b,!1,c)};Q.unmoun
 })();
 </script>
 <script>try{const { useState, useEffect, useRef } = React;
+function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
 /* ============================================================
    RYAN'S RECOMP TRACKER
    4-Day Upper/Lower Split (each muscle group 2x/week)
@@ -4941,20 +4942,59 @@ function parseLoad(str) {
 function round5(x) {
   return Math.max(5, Math.round(x / 5) * 5);
 }
+// Plate math for a standard 45 lb barbell. Greedily loads the heaviest plates
+// you'd actually rack, per side. Returns null if we can't reason about it.
+const BAR_LB = 45;
+const PLATE_LB = [45, 35, 25, 10, 5, 2.5];
+function platesPerSide(total) {
+  const w = typeof total === "number" ? total : parseFloat(total);
+  if (isNaN(w)) return null;
+  if (w < BAR_LB) return {
+    under: true
+  };
+  let rem = (w - BAR_LB) / 2; // weight to hang on each side
+  const used = [];
+  for (const p of PLATE_LB) {
+    while (rem >= p - 1e-9) {
+      used.push(p);
+      rem = Math.round((rem - p) * 100) / 100;
+    }
+  }
+  return {
+    plates: used,
+    exact: rem < 1e-9,
+    leftover: rem
+  };
+}
+// Is this lift loaded on a straight barbell? (EZ bars, dumbbells, machines are not)
+function isBarbellLift(name) {
+  const c = CATALOG.find(x => x.name === name);
+  return !!(c && Array.isArray(c.equip) && c.equip.includes("barbell"));
+}
 // Highest weight actually logged across a set list
 function maxLogged(sets) {
   let mx = null;
   sets.forEach(s => {
+    if (s.warmup) return; // warm-ups don't count toward the working weight
     const v = parseFloat(s.weight);
     if (!isNaN(v)) mx = mx === null ? v : Math.max(mx, v);
   });
   return mx;
 }
-// Next session's suggestion given how the lift felt
-function nextLoad(base, feedback) {
-  if (feedback === "hard") return round5(base * 0.9); // struggled → back off ~10%
-  if (feedback === "easy") return round5(base * 1.075); // too light → add ~7–8%
-  return round5(base); // just right → repeat
+// Next session's suggestion given how the lift felt, refined by reps-in-reserve
+// (RIR) on the last set when he tapped it. RIR is the more objective signal, so
+// it can override the subjective easy/ok/hard: plenty left in the tank means add,
+// nothing left means never add — hold instead.
+function nextLoad(base, feedback, rir) {
+  let w = base;
+  if (feedback === "hard") w = base * 0.9; // struggled → back off ~10%
+  else if (feedback === "easy") w = base * 1.075; // too light → add ~7–8%
+  if (rir != null) {
+    if (rir >= 3) w = Math.max(w, base * 1.075); // 3+ reps left → clearly add weight
+    else if (rir <= 0) w = Math.min(w, base); // hit failure → hold, never add
+    // 1–2 reps left is the sweet spot — trust the easy/ok/hard read as-is
+  }
+  return round5(w); // just right → repeat
 }
 
 // ============================================================
@@ -5935,6 +5975,7 @@ function epley(weight, reps) {
 function bestSet(sets) {
   let best = null;
   sets.forEach(s => {
+    if (s.warmup) return; // warm-ups never set a PR
     const w = parseFloat(s.weight),
       r = parseFloat(s.reps);
     if (isNaN(w) || isNaN(r)) return;
@@ -6005,6 +6046,8 @@ const DEFAULT_SETTINGS = {
   targetDate: "2026-09-26",
   restAutoStart: true,
   restSound: true,
+  haptics: true,
+  // buzz on set-complete and rest-timer-done (no-op where unsupported, e.g. iOS Safari)
   theme: "dark",
   // "light" | "dark" | "auto"
   goalType: "Recomp",
@@ -6365,9 +6408,25 @@ function Dashboard({
     water: 0
   },
   nutritionToday = {},
-  onGoNutrition
+  onGoNutrition,
+  checkins = [],
+  dailyWeights = [],
+  onLogWeight
 }) {
   const started = isPlanStarted(settings.startDate);
+  // Daily weigh-in — one number, smoothed into a 10-day trend so a salty dinner doesn't spook him
+  const todayW = isoDay();
+  const loggedToday = (dailyWeights || []).find(e => e.date === todayW);
+  const [wInput, setWInput] = useState(loggedToday ? String(loggedToday.weight) : "");
+  const wSeries = ewmaTrend(weightSeries(checkins, dailyWeights));
+  const wTrend = wSeries.length ? wSeries[wSeries.length - 1].trend : null;
+  // 7-day change in the trend, so the card says which way things are actually heading
+  const wAgo = wSeries.length ? wSeries.find(p => (Date.now() - p.d) / 86400000 <= 7.5) : null;
+  const wDelta = wTrend != null && wAgo ? wTrend - wAgo.trend : null;
+  const submitWeight = () => {
+    const n = parseFloat(wInput);
+    if (!isNaN(n) && n > 0 && onLogWeight) onLogWeight(n);
+  };
   // Anchor the displayed week to real calendar dates; hide days before the plan's start date
   const startD0 = planStartD0(settings.startDate);
   const nowD0 = (() => {
@@ -6519,7 +6578,74 @@ function Dashboard({
         borderRadius: 2
       }
     })));
-  })), weekFocus && /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "mb-6 px-4 py-4",
+    style: {
+      backgroundColor: "var(--card)",
+      borderRadius: 6,
+      border: "1px solid var(--border)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between mb-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-xs uppercase font-bold tracking-widest",
+    style: {
+      color: BLUE
+    }
+  }, "Today's Weight"), wTrend != null && /*#__PURE__*/React.createElement("span", {
+    className: "text-xs font-bold",
+    style: {
+      color: "var(--muted2)"
+    }
+  }, "Trend ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "var(--text2)"
+    }
+  }, wTrend.toFixed(1), " lb"), wDelta != null && Math.abs(wDelta) >= 0.1 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: wDelta < 0 ? "#22C55E" : "#FFB020"
+    }
+  }, " ", wDelta < 0 ? "▼" : "▲", Math.abs(wDelta).toFixed(1), "/wk"))), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    inputMode: "decimal",
+    step: "0.1",
+    value: wInput,
+    onChange: e => setWInput(e.target.value),
+    onKeyDown: e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        submitWeight();
+        e.target.blur();
+      }
+    },
+    placeholder: wTrend != null ? wTrend.toFixed(1) : "lb",
+    className: "flex-1 px-3 text-base font-bold",
+    style: {
+      height: 44,
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
+      borderRadius: 6,
+      border: "1px solid var(--border)",
+      minWidth: 0
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: submitWeight,
+    className: "px-5 font-bold active:scale-95 transition-transform",
+    style: {
+      height: 44,
+      backgroundColor: BLUE,
+      color: "#04120A",
+      borderRadius: 6
+    }
+  }, loggedToday ? "Update" : "Log")), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs mt-2",
+    style: {
+      color: "var(--faint)",
+      lineHeight: 1.4
+    }
+  }, loggedToday ? `Logged ${loggedToday.weight} lb today — weigh in daily; the trend line ignores one-day spikes.` : "One quick number, first thing. Daily dots feed the smoothed trend on the Progress chart.")), weekFocus && /*#__PURE__*/React.createElement("div", {
     className: "mb-6 px-4 py-4",
     style: {
       backgroundColor: "var(--card)",
@@ -6855,23 +6981,53 @@ function Workout({
   onDiscard,
   onOpenGuide,
   perf = {},
+  strength = {},
   settings = DEFAULT_SETTINGS,
   gyms = [],
   activeGymId,
-  onGymChange
+  onGymChange,
+  resume = null,
+  onResumeConsumed
 }) {
-  const [elapsed, setElapsed] = useState(0);
+  // `resume` re-opens a session that was just finished or discarded (Undo),
+  // seeded with exactly the sets/timer/ratings it had.
+  const [elapsed, setElapsed] = useState(resume ? resume.elapsed || 0 : 0);
   const [running, setRunning] = useState(false);
   const [picker, setPicker] = useState(false);
   const [pickerMuscle, setPickerMuscle] = useState("All");
-  const [rating, setRating] = useState(null);
-  const [notes, setNotes] = useState("");
+  const [rating, setRating] = useState(resume ? resume.rating ?? null : null);
+  const [notes, setNotes] = useState(resume ? resume.notes || "" : "");
   const [rest, setRest] = useState(null); // { remaining, total, name }
-  const [gymId, setGymId] = useState(activeGymId);
+  const [gymId, setGymId] = useState(resume ? resume.gymId ?? activeGymId : activeGymId);
   const [gymOpen, setGymOpen] = useState(false);
+  const [prBanner, setPrBanner] = useState(null); // { name, e1rm } — in-the-moment PR celebration
+  const [collapsed, setCollapsed] = useState(() => {
+    const c = {};
+    if (resume && resume.exercises) resume.exercises.forEach(ex => {
+      if (ex.sets.length > 0 && ex.sets.every(s => s.done)) c[ex.key] = true;
+    });
+    return c;
+  }); // exercise key -> folded once all its sets are ticked
+  const toggleCollapse = key => setCollapsed(c => ({
+    ...c,
+    [key]: !c[key]
+  }));
+
+  // Best prior estimated-1RM per exercise, snapshotted when the session opens.
+  // Ticking a set that beats this bumps the baseline so we only celebrate once
+  // per new best (re-ticking the same set won't re-fire).
+  const prBestRef = useRef(null);
+  if (prBestRef.current === null) {
+    const m = {};
+    Object.keys(strength || {}).forEach(name => {
+      const arr = strength[name];
+      if (arr && arr.length) m[name] = arr.reduce((mx, x) => Math.max(mx, x.e1rm || 0), 0);
+    });
+    prBestRef.current = m;
+  }
   const gym = gyms.find(g => g.id === gymId) || gyms[0];
   // Apply the selected gym's equipment to the base day (re-runs only when you switch gyms)
-  const [day, setDay] = useState(() => applyGym(baseDay, gym, perf));
+  const [day, setDay] = useState(() => resume && resume.day ? resume.day : applyGym(baseDay, gym, perf));
 
   // Turn a resolved day into editable session rows (carries tuned loads / ease-back)
   const buildSession = d => (d.exercises || []).map((ex, i) => {
@@ -6884,6 +7040,7 @@ function Workout({
       name: ex.name,
       muscle: ex.muscle,
       feedback: "ok",
+      rir: null,
       liked: null,
       unavailable: ex.unavailable || false,
       target: {
@@ -6896,13 +7053,15 @@ function Workout({
         length: ex.sets
       }, () => ({
         prev: rec ? `last: ${rec.from} lb` : "—",
+        prevWeight: rec && rec.from != null ? rec.from : null,
+        prevReps: rec && rec.reps != null ? rec.reps : null,
         weight: "",
         reps: "",
         done: false
       }))
     };
   });
-  const [exercises, setExercises] = useState(() => buildSession(day));
+  const [exercises, setExercises] = useState(() => resume && resume.exercises ? resume.exercises : buildSession(day));
 
   // Switch gyms mid-setup: re-substitute exercises for the new equipment
   const changeGym = id => {
@@ -6920,11 +7079,45 @@ function Workout({
     return () => clearInterval(t);
   }, [running]);
 
+  // Once we've seeded from a resumed session, clear it upstream so a later fresh
+  // visit to the Workout tab (e.g. via the menu) doesn't reopen this stale one.
+  useEffect(() => {
+    if (resume && onResumeConsumed) onResumeConsumed();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the screen awake while the workout screen is open. Feature-detected and
+  // fails silently where unsupported. iOS drops the lock when the app is
+  // backgrounded, so we re-acquire it whenever we return to the foreground.
+  useEffect(() => {
+    if (!("wakeLock" in navigator)) return; // unsupported (older iOS, etc.) — no-op
+    let lock = null;
+    let done = false;
+    const acquire = async () => {
+      try {
+        lock = await navigator.wakeLock.request("screen");
+      } catch (e) {/* denied (e.g. low battery) — fine, just no keep-awake */}
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible" && !done) acquire();
+    };
+    acquire();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      done = true;
+      document.removeEventListener("visibilitychange", onVis);
+      try {
+        if (lock) lock.release();
+      } catch (e) {}
+      lock = null;
+    };
+  }, []);
+
   // Rest-timer countdown; beeps + buzzes at zero, then auto-dismisses
   useEffect(() => {
     if (!rest) return;
     if (rest.remaining <= 0) {
       beep();
+      buzz([120, 60, 120]); // longer double-buzz when rest is up
       const t = setTimeout(() => setRest(null), 4000);
       return () => clearTimeout(t);
     }
@@ -6934,6 +7127,27 @@ function Workout({
     } : r), 1000);
     return () => clearTimeout(t);
   }, [rest]);
+
+  // Mirror the rest countdown into the tab title so it's readable with the phone
+  // locked / screen dimmed, without unlocking. Restores the app title when rest
+  // ends or the screen unmounts. baseTitleRef is captured once so the per-second
+  // rerun never latches onto an already-modified title.
+  const baseTitleRef = useRef(typeof document !== "undefined" ? document.title : "Recomp Tracker");
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const base = baseTitleRef.current || "Recomp Tracker";
+    if (rest) document.title = rest.remaining > 0 ? `⏱ ${fmt(rest.remaining)} · Rest` : "✓ Rest done";else document.title = base;
+    return () => {
+      document.title = base;
+    };
+  }, [rest]);
+
+  // Auto-dismiss the PR celebration banner after a few seconds
+  useEffect(() => {
+    if (!prBanner) return;
+    const t = setTimeout(() => setPrBanner(null), 4000);
+    return () => clearTimeout(t);
+  }, [prBanner]);
   const beep = () => {
     if (!settings.restSound) return;
     try {
@@ -6951,9 +7165,14 @@ function Workout({
       o.start();
       o.stop(ctx.currentTime + 0.42);
     } catch (e) {/* audio unavailable */}
+  };
+  // Haptic buzz — pattern is a ms number or array. No-op where unsupported
+  // (iOS Safari has no navigator.vibrate) and when the setting is off.
+  const buzz = pattern => {
+    if (!settings.haptics) return;
     try {
-      if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
-    } catch (e) {}
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    } catch (e) {/* no vibration API */}
   };
   const startRest = (restStr, name) => {
     const secs = parseRest(restStr);
@@ -6983,6 +7202,21 @@ function Workout({
       })
     }));
   };
+  // Tap the Prev cell to copy last session's weight & reps into this row (stays un-ticked)
+  const fillPrev = (exI, setI) => {
+    setExercises(prev => prev.map((ex, i) => i !== exI ? ex : {
+      ...ex,
+      sets: ex.sets.map((st, s) => {
+        if (s !== setI) return st;
+        if (st.prevWeight == null && st.prevReps == null) return st; // nothing to fill
+        return {
+          ...st,
+          weight: st.prevWeight != null ? String(st.prevWeight) : st.weight,
+          reps: st.prevReps != null ? String(st.prevReps) : st.reps
+        };
+      })
+    }));
+  };
   const toggleDone = (exI, setI) => {
     const ex = exercises[exI];
     const nowDone = ex ? !ex.sets[setI].done : false;
@@ -6993,7 +7227,35 @@ function Workout({
         done: nowDone
       })
     }));
+    if (nowDone) buzz(10); // quick tick of feedback when a set is completed
     if (nowDone && ex && settings.restAutoStart) startRest(ex.target.rest, ex.name); // auto-start rest on completing a set
+    // Fold the card the moment its last set is ticked, so the next lift rises into
+    // view. Unticking a set (dropping below all-done) re-opens it automatically.
+    if (ex) {
+      const newAllDone = ex.sets.length > 0 && ex.sets.every((st, s) => s === setI ? nowDone : st.done);
+      const wasAllDone = ex.sets.length > 0 && ex.sets.every(st => st.done);
+      if (newAllDone && !wasAllDone) setCollapsed(c => ({
+        ...c,
+        [ex.key]: true
+      }));else if (!newAllDone) setCollapsed(c => c[ex.key] ? {
+        ...c,
+        [ex.key]: false
+      } : c);
+    }
+    // In-the-moment PR: does this set beat his best estimated 1RM for the lift?
+    if (nowDone && ex && !ex.sets[setI].warmup) {
+      const st = ex.sets[setI];
+      const e = epley(parseFloat(st.weight), parseFloat(st.reps));
+      const baseline = prBestRef.current[ex.name] || 0;
+      if (e > 0 && e > baseline) {
+        prBestRef.current[ex.name] = e; // raise the bar so we only celebrate the new best once
+        setPrBanner({
+          name: ex.name,
+          e1rm: e
+        });
+        buzz([30, 40, 30, 40, 90]); // a little celebration buzz, distinct from the plain tick
+      }
+    }
   };
   const setFeedback = (exI, val) => {
     setExercises(prev => prev.map((ex, i) => i !== exI ? ex : {
@@ -7001,11 +7263,39 @@ function Workout({
       feedback: val
     }));
   };
+  // Reps-in-reserve on the last set — tap again to clear (it's skippable)
+  const setRir = (exI, val) => {
+    setExercises(prev => prev.map((ex, i) => i !== exI ? ex : {
+      ...ex,
+      rir: ex.rir === val ? null : val
+    }));
+    buzz(10);
+  };
   const setLiked = (exI, val) => {
     setExercises(prev => prev.map((ex, i) => i !== exI ? ex : {
       ...ex,
       liked: ex.liked === val ? null : val
     }));
+  };
+  // Tap the set number to flag it a warm-up (W1/W2…). Warm-ups are excluded from
+  // PRs, the working-weight tuning, the plate math and weekly volume.
+  const toggleWarmup = (exI, setI) => {
+    setExercises(prev => prev.map((ex, i) => i !== exI ? ex : {
+      ...ex,
+      sets: ex.sets.map((st, s) => s !== setI ? st : {
+        ...st,
+        warmup: !st.warmup
+      })
+    }));
+    buzz(10);
+  };
+  // Swipe a set row left past the threshold to remove it
+  const deleteSet = (exI, setI) => {
+    setExercises(prev => prev.map((ex, i) => i !== exI ? ex : {
+      ...ex,
+      sets: ex.sets.filter((_, s) => s !== setI)
+    }));
+    buzz(10);
   };
   const addSet = exI => {
     setExercises(prev => prev.map((ex, i) => i !== exI ? ex : {
@@ -7024,6 +7314,7 @@ function Workout({
       name: lib.name,
       muscle: lib.muscle,
       feedback: "ok",
+      rir: null,
       liked: null,
       target: {
         reps: "8–12",
@@ -7041,6 +7332,16 @@ function Workout({
     }]);
     setPicker(false);
   };
+
+  // Full editable snapshot, so App can re-open this exact session on Undo
+  const rawSession = () => ({
+    day,
+    elapsed,
+    rating,
+    notes,
+    gymId,
+    exercises
+  });
   const doneCount = exercises.reduce((a, ex) => a + ex.sets.filter(s => s.done).length, 0);
   const totalCount = exercises.reduce((a, ex) => a + ex.sets.length, 0);
   const muscles = ["All", ...Object.keys(MUSCLE_COLORS)];
@@ -7182,138 +7483,213 @@ function Workout({
     title: "Warm-Up",
     accent: "#FFB020",
     items: ["5 min cardio (bike / incline walk)", "Leg swings x 10 each", "Arm circles x 15", "Bodyweight squats x 15", "Band pull-aparts x 20"]
-  }), exercises.map((ex, exI) => /*#__PURE__*/React.createElement("div", {
-    key: ex.key,
-    className: "mb-4",
-    style: {
-      backgroundColor: "var(--card)",
-      borderRadius: 6,
-      overflow: "hidden",
-      border: "1px solid var(--border)"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center justify-between px-4 pt-3 pb-2"
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => onOpenGuide(ex.name),
-    className: "text-left active:opacity-70"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "text-xl font-extrabold leading-tight flex items-center gap-1.5",
-    style: {
-      color: "var(--text)",
-      fontFamily: FONT_HEAD
-    }
-  }, ex.name, /*#__PURE__*/React.createElement("span", {
-    className: "font-bold",
-    style: {
-      color: BLUE,
-      fontSize: 13
-    }
-  }, "\u24D8")), /*#__PURE__*/React.createElement("div", {
-    className: "mt-1"
-  }, /*#__PURE__*/React.createElement(MuscleTag, {
-    muscle: ex.muscle,
-    small: true
-  })))), /*#__PURE__*/React.createElement("div", {
-    className: "flex flex-wrap gap-2 px-4 pb-3"
-  }, /*#__PURE__*/React.createElement(TargetChip, {
-    label: "Sets \xD7 Reps",
-    value: `${ex.sets.length} × ${ex.target.reps}`
-  }), ex.target.load && ex.target.load !== "—" && /*#__PURE__*/React.createElement(TargetChip, {
-    label: ex.target.adjusted ? "Target" : "Start",
-    value: ex.target.load
-  }), ex.target.rest && ex.target.rest !== "—" && /*#__PURE__*/React.createElement(TargetChip, {
-    label: "Rest",
-    value: ex.target.rest
-  }), (ex.target.adjusted === "up" || ex.target.adjusted === "down") && /*#__PURE__*/React.createElement(AdjBadge, {
-    dir: ex.target.adjusted
-  }), ex.unavailable && /*#__PURE__*/React.createElement("div", {
-    className: "px-2.5 py-1",
-    style: {
-      backgroundColor: "#2A1710",
-      borderRadius: 4,
-      border: "1px solid #4A2E12"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "text-xs font-bold uppercase tracking-wider",
-    style: {
-      color: "#FFB020"
-    }
-  }, "No gear here \u2014 skip/sub"))), /*#__PURE__*/React.createElement("div", {
-    className: "grid px-4 pb-1 text-xs uppercase font-bold tracking-wider",
-    style: {
-      color: "var(--faint)",
-      gridTemplateColumns: "34px 1fr 1fr 1fr 44px",
-      gap: "6px"
-    }
-  }, /*#__PURE__*/React.createElement("div", null, "Set"), /*#__PURE__*/React.createElement("div", null, "Prev"), /*#__PURE__*/React.createElement("div", null, "Lbs"), /*#__PURE__*/React.createElement("div", null, "Reps"), /*#__PURE__*/React.createElement("div", {
-    className: "text-center"
-  }, "\u2713")), ex.sets.map((st, setI) => /*#__PURE__*/React.createElement("div", {
-    key: setI,
-    className: "grid items-center px-4 py-1.5",
-    style: {
-      gridTemplateColumns: "34px 1fr 1fr 1fr 44px",
-      gap: "6px",
-      backgroundColor: st.done ? "var(--greentint)" : "transparent"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "text-lg font-bold",
-    style: {
-      color: st.done ? "#22C55E" : "var(--muted)",
-      fontFamily: FONT_HEAD
-    }
-  }, setI + 1), /*#__PURE__*/React.createElement("div", {
-    className: "text-sm",
-    style: {
-      color: "var(--faint)"
-    }
-  }, st.prev), /*#__PURE__*/React.createElement("input", {
-    inputMode: "numeric",
-    value: st.weight,
-    onChange: e => setField(exI, setI, "weight", e.target.value),
-    placeholder: "\u2014",
-    className: "w-full px-2 py-1.5 text-base font-bold outline-none",
-    style: {
-      backgroundColor: "var(--bg)",
-      color: "var(--text)",
-      borderRadius: 3,
-      border: "1px solid var(--border)",
-      textAlign: "center"
-    }
-  }), /*#__PURE__*/React.createElement("input", {
-    inputMode: "numeric",
-    value: st.reps,
-    onChange: e => setField(exI, setI, "reps", e.target.value),
-    placeholder: "\u2014",
-    className: "w-full px-2 py-1.5 text-base font-bold outline-none",
-    style: {
-      backgroundColor: "var(--bg)",
-      color: "var(--text)",
-      borderRadius: 3,
-      border: "1px solid var(--border)",
-      textAlign: "center"
-    }
+  }), exercises.map((ex, exI) => {
+    const doneN = ex.sets.filter(s => s.done).length;
+    const allDone = ex.sets.length > 0 && doneN === ex.sets.length;
+    const isCollapsed = !!collapsed[ex.key];
+    // Warm-ups number W1/W2…; working sets keep 1/2/3…
+    let wUp = 0,
+      wWork = 0;
+    const setLabels = ex.sets.map(st => st.warmup ? `W${++wUp}` : `${++wWork}`);
+    return /*#__PURE__*/React.createElement("div", {
+      key: ex.key,
+      className: "mb-4",
+      style: {
+        backgroundColor: "var(--card)",
+        borderRadius: 6,
+        overflow: "hidden",
+        border: "1px solid var(--border)",
+        opacity: isCollapsed ? 0.82 : 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center justify-between px-4 pt-3 pb-2"
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => onOpenGuide(ex.name),
+      className: "text-left active:opacity-70 min-w-0"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-xl font-extrabold leading-tight flex items-center gap-1.5",
+      style: {
+        color: "var(--text)",
+        fontFamily: FONT_HEAD
+      }
+    }, ex.name, /*#__PURE__*/React.createElement("span", {
+      className: "font-bold",
+      style: {
+        color: BLUE,
+        fontSize: 13
+      }
+    }, "\u24D8")), /*#__PURE__*/React.createElement("div", {
+      className: "mt-1"
+    }, /*#__PURE__*/React.createElement(MuscleTag, {
+      muscle: ex.muscle,
+      small: true
+    }))), (allDone || isCollapsed) && /*#__PURE__*/React.createElement("button", {
+      onClick: () => toggleCollapse(ex.key),
+      className: "flex items-center gap-1.5 pl-3 pr-1 py-2 flex-shrink-0 active:opacity-60",
+      "aria-label": isCollapsed ? "Expand exercise" : "Collapse exercise"
+    }, isCollapsed && /*#__PURE__*/React.createElement("span", {
+      className: "text-xs font-extrabold",
+      style: {
+        color: "#22C55E"
+      }
+    }, "\u2713 ", doneN, "/", ex.sets.length), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "var(--muted2)",
+        fontSize: 15,
+        display: "inline-block",
+        transition: "transform .15s",
+        transform: isCollapsed ? "none" : "rotate(180deg)"
+      }
+    }, "\u25BE"))), !isCollapsed && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      className: "flex flex-wrap gap-2 px-4 pb-3"
+    }, /*#__PURE__*/React.createElement(TargetChip, {
+      label: "Sets \xD7 Reps",
+      value: `${ex.sets.length} × ${ex.target.reps}`
+    }), ex.target.load && ex.target.load !== "—" && /*#__PURE__*/React.createElement(TargetChip, {
+      label: ex.target.adjusted ? "Target" : "Start",
+      value: ex.target.load
+    }), ex.target.rest && ex.target.rest !== "—" && /*#__PURE__*/React.createElement(TargetChip, {
+      label: "Rest",
+      value: ex.target.rest
+    }), (ex.target.adjusted === "up" || ex.target.adjusted === "down") && /*#__PURE__*/React.createElement(AdjBadge, {
+      dir: ex.target.adjusted
+    }), ex.unavailable && /*#__PURE__*/React.createElement("div", {
+      className: "px-2.5 py-1",
+      style: {
+        backgroundColor: "#2A1710",
+        borderRadius: 4,
+        border: "1px solid #4A2E12"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "text-xs font-bold uppercase tracking-wider",
+      style: {
+        color: "#FFB020"
+      }
+    }, "No gear here \u2014 skip/sub"))), /*#__PURE__*/React.createElement("div", {
+      className: "grid px-4 pb-1 text-xs uppercase font-bold tracking-wider",
+      style: {
+        color: "var(--faint)",
+        gridTemplateColumns: "34px 1fr 1fr 1fr 44px",
+        gap: "6px"
+      }
+    }, /*#__PURE__*/React.createElement("div", null, "Set"), /*#__PURE__*/React.createElement("div", null, "Prev"), /*#__PURE__*/React.createElement("div", null, "Lbs"), /*#__PURE__*/React.createElement("div", null, "Reps"), /*#__PURE__*/React.createElement("div", {
+      className: "text-center"
+    }, "\u2713")), ex.sets.map((st, setI) => /*#__PURE__*/React.createElement(SwipeRow, {
+      key: setI,
+      onDelete: () => deleteSet(exI, setI)
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "grid items-center px-4 py-1.5",
+      style: {
+        gridTemplateColumns: "34px 1fr 1fr 1fr 44px",
+        gap: "6px",
+        backgroundColor: st.done ? "var(--greentint)" : "transparent"
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => toggleWarmup(exI, setI),
+      className: "text-lg font-bold text-left active:opacity-60",
+      style: {
+        color: st.warmup ? "#FFB020" : st.done ? "#22C55E" : "var(--muted)",
+        fontFamily: FONT_HEAD,
+        minHeight: 34
+      },
+      title: st.warmup ? "Warm-up set — tap to make it a working set" : "Tap to mark this a warm-up set"
+    }, setLabels[setI]), st.prevWeight != null || st.prevReps != null ? /*#__PURE__*/React.createElement("button", {
+      onClick: () => fillPrev(exI, setI),
+      className: "text-sm font-semibold text-left active:opacity-60 flex items-center",
+      style: {
+        color: BLUE,
+        minHeight: 34
+      },
+      title: "Tap to fill this row with last time's numbers"
+    }, st.prevReps != null ? `${st.prevWeight}×${st.prevReps}` : `${st.prevWeight} lb`) : /*#__PURE__*/React.createElement("div", {
+      className: "text-sm",
+      style: {
+        color: "var(--faint)"
+      }
+    }, st.prev), /*#__PURE__*/React.createElement("input", {
+      inputMode: "numeric",
+      value: st.weight,
+      onChange: e => setField(exI, setI, "weight", e.target.value),
+      placeholder: st.prevWeight != null ? String(st.prevWeight) : "—",
+      className: "w-full px-2 py-1.5 text-base font-bold outline-none",
+      style: {
+        backgroundColor: "var(--bg)",
+        color: "var(--text)",
+        borderRadius: 3,
+        border: "1px solid var(--border)",
+        textAlign: "center"
+      }
+    }), /*#__PURE__*/React.createElement("input", {
+      inputMode: "numeric",
+      value: st.reps,
+      onChange: e => setField(exI, setI, "reps", e.target.value),
+      placeholder: st.prevReps != null ? String(st.prevReps) : "—",
+      className: "w-full px-2 py-1.5 text-base font-bold outline-none",
+      style: {
+        backgroundColor: "var(--bg)",
+        color: "var(--text)",
+        borderRadius: 3,
+        border: "1px solid var(--border)",
+        textAlign: "center"
+      }
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: () => toggleDone(exI, setI),
+      className: "flex items-center justify-center active:scale-90 transition-transform",
+      style: {
+        height: 44,
+        width: 44,
+        margin: "0 auto",
+        borderRadius: 4,
+        backgroundColor: st.done ? "#22C55E" : "var(--bg)",
+        border: st.done ? "none" : "1px solid var(--toggleoff)",
+        color: st.done ? "#04120A" : "var(--faint)",
+        fontWeight: 900,
+        fontSize: 18
+      }
+    }, "\u2713")))), isBarbellLift(ex.name) && /*#__PURE__*/React.createElement(PlateHint, {
+      sets: ex.sets,
+      targetLoad: ex.target.load
+    }), /*#__PURE__*/React.createElement("div", {
+      className: "px-4 pt-2 pb-3",
+      style: {
+        borderTop: "1px solid var(--border)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-xs uppercase font-bold tracking-wider mb-1.5",
+      style: {
+        color: "var(--faint)"
+      }
+    }, "Reps left on last set ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        textTransform: "none",
+        fontWeight: 600,
+        color: "var(--muted2)"
+      }
+    }, "\xB7 optional")), /*#__PURE__*/React.createElement("div", {
+      className: "flex gap-1.5"
+    }, [[0, "0"], [1, "1"], [2, "2"], [3, "3"], [4, "4+"]].map(([val, label]) => {
+      const sel = ex.rir === val;
+      return /*#__PURE__*/React.createElement("button", {
+        key: val,
+        onClick: () => setRir(exI, val),
+        className: "flex-1 text-sm font-bold active:scale-95 transition-transform",
+        style: {
+          minHeight: 44,
+          borderRadius: 4,
+          color: sel ? "#04120A" : "var(--text2)",
+          backgroundColor: sel ? BLUE : "transparent",
+          border: `1px solid ${sel ? BLUE : "var(--border)"}`
+        }
+      }, label);
+    }))), /*#__PURE__*/React.createElement("button", {
+      onClick: () => addSet(exI),
+      className: "w-full py-2 text-sm font-bold uppercase tracking-wider active:opacity-70",
+      style: {
+        color: BLUE,
+        borderTop: "1px solid var(--border)"
+      }
+    }, "+ Add Set")));
   }), /*#__PURE__*/React.createElement("button", {
-    onClick: () => toggleDone(exI, setI),
-    className: "flex items-center justify-center active:scale-90 transition-transform",
-    style: {
-      height: 34,
-      width: 34,
-      margin: "0 auto",
-      borderRadius: 4,
-      backgroundColor: st.done ? "#22C55E" : "var(--bg)",
-      border: st.done ? "none" : "1px solid var(--toggleoff)",
-      color: st.done ? "#04120A" : "var(--faint)",
-      fontWeight: 900,
-      fontSize: 18
-    }
-  }, "\u2713"))), /*#__PURE__*/React.createElement("button", {
-    onClick: () => addSet(exI),
-    className: "w-full py-2 text-sm font-bold uppercase tracking-wider active:opacity-70",
-    style: {
-      color: BLUE,
-      borderTop: "1px solid var(--border)"
-    }
-  }, "+ Add Set"))), /*#__PURE__*/React.createElement("button", {
     onClick: () => setPicker(p => !p),
     className: "w-full py-3 text-base font-extrabold uppercase tracking-wider mb-2 active:scale-95 transition-transform",
     style: {
@@ -7496,7 +7872,43 @@ function Workout({
       resize: "vertical",
       fontFamily: FONT_BODY
     }
-  }))), rest && /*#__PURE__*/React.createElement("div", {
+  }))), prBanner && /*#__PURE__*/React.createElement("div", {
+    className: "fixed left-0 right-0 z-50 px-3 flex justify-center",
+    style: {
+      top: "calc(env(safe-area-inset-top) + 0.75rem)",
+      pointerEvents: "none"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setPrBanner(null),
+    className: "flex items-center gap-3 px-4 py-3 active:scale-95 transition-transform",
+    style: {
+      pointerEvents: "auto",
+      maxWidth: 360,
+      backgroundColor: "var(--greentint)",
+      border: "1px solid #1E5B3A",
+      borderRadius: 12,
+      boxShadow: "0 8px 28px rgba(0,0,0,0.45)"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-2xl leading-none"
+  }, "\uD83C\uDFC6"), /*#__PURE__*/React.createElement("div", {
+    className: "text-left"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-xs uppercase font-bold tracking-widest",
+    style: {
+      color: "#22C55E"
+    }
+  }, "New PR!"), /*#__PURE__*/React.createElement("div", {
+    className: "text-sm font-extrabold leading-tight",
+    style: {
+      color: "var(--text)"
+    }
+  }, prBanner.name), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs",
+    style: {
+      color: "var(--muted2)"
+    }
+  }, "Est. 1RM ", prBanner.e1rm, " lb")))), rest && /*#__PURE__*/React.createElement("div", {
     className: "fixed left-0 right-0 z-40 px-3",
     style: {
       bottom: 74
@@ -7550,7 +7962,7 @@ function Workout({
       paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)"
     }
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: onDiscard,
+    onClick: () => onDiscard(rawSession()),
     className: "px-5 py-3 text-base font-extrabold uppercase tracking-wider active:scale-95 transition-transform",
     style: {
       color: "#FF4D6D",
@@ -7566,6 +7978,7 @@ function Workout({
       totalCount,
       rating,
       notes,
+      raw: rawSession(),
       complete: totalCount > 0 && doneCount >= totalCount,
       exercises: exercises.map(ex => {
         const b = bestSet(ex.sets);
@@ -7573,6 +7986,7 @@ function Workout({
           name: ex.name,
           muscle: ex.muscle,
           feedback: ex.feedback,
+          rir: ex.rir,
           liked: ex.liked,
           targetLoad: ex.target.load,
           logged: maxLogged(ex.sets),
@@ -7582,7 +7996,8 @@ function Workout({
           sets: ex.sets.map(s => ({
             weight: s.weight,
             reps: s.reps,
-            done: s.done
+            done: s.done,
+            warmup: s.warmup || false
           }))
         };
       })
@@ -7594,6 +8009,92 @@ function Workout({
       borderRadius: 6
     }
   }, doneCount >= totalCount ? "Finish Workout" : `Save Partial (${doneCount}/${totalCount})`)));
+}
+
+// A row that slides left under the finger to reveal a red delete affordance, and
+// removes itself once dragged past the threshold. Only reacts to a clearly
+// horizontal (leftward) drag, so it never steals the page's vertical scroll or
+// the swipe-right-to-go-back gesture. Springs back if released early.
+function SwipeRow({
+  onDelete,
+  children
+}) {
+  const [dx, setDx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startRef = useRef(null); // {x,y}
+  const activeRef = useRef(false); // committed to a horizontal drag
+  const THRESH = 72,
+    MAXPULL = 108;
+  const onStart = e => {
+    const t = e.touches ? e.touches[0] : e;
+    startRef.current = {
+      x: t.clientX,
+      y: t.clientY
+    };
+    activeRef.current = false;
+  };
+  const onMove = e => {
+    if (!startRef.current) return;
+    const t = e.touches ? e.touches[0] : e;
+    const mx = t.clientX - startRef.current.x;
+    const my = t.clientY - startRef.current.y;
+    if (!activeRef.current) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      if (Math.abs(mx) <= Math.abs(my)) {
+        startRef.current = null;
+        return;
+      } // vertical → let the page scroll
+      activeRef.current = true;
+      setDragging(true);
+    }
+    e.stopPropagation(); // ours now — keep it away from the page swipe-back
+    setDx(Math.max(-MAXPULL, Math.min(0, mx)));
+  };
+  const onEnd = () => {
+    if (!startRef.current && !activeRef.current) {
+      setDx(0);
+      setDragging(false);
+      return;
+    }
+    const past = dx <= -THRESH;
+    startRef.current = null;
+    activeRef.current = false;
+    setDragging(false);
+    if (past) {
+      setDx(0);
+      onDelete();
+    } else setDx(0);
+  };
+  const armed = dx <= -THRESH;
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "absolute inset-0 flex items-center justify-end pr-4",
+    style: {
+      backgroundColor: armed ? "#7F1D2B" : "#2A1216",
+      transition: "background-color .12s"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-sm font-extrabold uppercase tracking-wider",
+    style: {
+      color: armed ? "#fff" : "#FF6B81"
+    }
+  }, "\uD83D\uDDD1 Delete")), /*#__PURE__*/React.createElement("div", {
+    onTouchStart: onStart,
+    onTouchMove: onMove,
+    onTouchEnd: onEnd,
+    onTouchCancel: onEnd,
+    style: {
+      position: "relative",
+      backgroundColor: "var(--card)",
+      transform: `translateX(${dx}px)`,
+      transition: dragging ? "none" : "transform .18s ease-out",
+      touchAction: "pan-y"
+    }
+  }, children));
 }
 function TargetChip({
   label,
@@ -7617,6 +8118,38 @@ function TargetChip({
       color: BLUE
     }
   }, value));
+}
+
+// Subtle "what to hang on the bar" readout for barbell lifts. Reads the weight
+// he's actually using (heaviest logged set, else the target), so it updates as
+// he types. Lives below the set grid so it never shifts the columns.
+function PlateHint({
+  sets,
+  targetLoad
+}) {
+  const logged = maxLogged(sets);
+  const w = logged != null ? logged : parseLoad(targetLoad);
+  const res = platesPerSide(w);
+  if (w == null || res == null) return null;
+  let text;
+  if (res.under) text = `below the empty ${BAR_LB} lb bar`;else if (res.plates.length === 0) text = `just the empty ${BAR_LB} lb bar`;else text = `${res.plates.join(" + ")} per side` + (res.exact ? "" : ` · can't match ${w} exactly`);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "px-4 py-2 text-xs",
+    style: {
+      borderTop: "1px solid var(--border)",
+      lineHeight: 1.4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "var(--faint)",
+      fontWeight: 700
+    }
+  }, "\uD83C\uDFCB ", w, " lb \u2192 "), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: res.exact === false ? "#FFB020" : "var(--text2)",
+      fontWeight: 700
+    }
+  }, text));
 }
 function GuidanceBanner({
   cardio
@@ -7740,7 +8273,7 @@ function History({
     }
   }, "\u201C", h.notes, "\u201D") : null, /*#__PURE__*/React.createElement("div", {
     className: "flex flex-wrap gap-1.5 mt-3"
-  }, h.exercises.map((ex, i) => {
+  }, (h.exercises || []).map((ex, i) => {
     const isPR = (h.prs || []).includes(ex);
     return /*#__PURE__*/React.createElement("span", {
       key: i,
@@ -7755,19 +8288,70 @@ function History({
   }))))));
 }
 
-// Weight-vs-goal pace chart (SVG) — driven by editable plan settings
+// ---- Daily weigh-in trend ----
+// Local YYYY-MM-DD for a Date (or now), used as the day key for daily weights.
+function isoDay(d) {
+  const x = d || new Date();
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+}
+// Merge weekly check-in weights and optional daily weigh-ins into one raw series,
+// one point per calendar day, sorted oldest → newest. A daily entry wins over a
+// check-in on the same day (it's the number he tapped in himself that morning).
+function weightSeries(checkins, dailyWeights) {
+  const byDay = new Map(); // dayKey -> { d: Date, w, src }
+  const put = (dateStr, w, src) => {
+    const d = parseLocalDate(dateStr);
+    const n = parseFloat(w);
+    if (!d || isNaN(n)) return;
+    const key = isoDay(d);
+    if (!byDay.has(key) || src === "daily") byDay.set(key, {
+      d,
+      w: n,
+      src
+    });
+  };
+  (checkins || []).forEach(c => put(c.date, c.weight, "checkin"));
+  (dailyWeights || []).forEach(e => put(e.date, e.weight, "daily"));
+  return [...byDay.values()].sort((a, b) => a.d - b.d);
+}
+// Exponentially weighted moving average with a ~10-day half-life. Spacing-aware:
+// the decay is based on the real gap in days between weigh-ins, so a missed day
+// or a weekly-only history still smooths correctly. Returns each raw point with
+// its .trend value attached. A single salty-dinner spike barely nudges .trend.
+function ewmaTrend(series, halfLifeDays = 10) {
+  let trend = null,
+    prevD = null;
+  return (series || []).map(p => {
+    if (trend == null) {
+      trend = p.w;
+    } else {
+      const gap = Math.max(0, (p.d - prevD) / 86400000);
+      const alpha = 1 - Math.pow(0.5, gap / halfLifeDays);
+      trend = trend + alpha * (p.w - trend);
+    }
+    prevD = p.d;
+    return {
+      d: p.d,
+      w: p.w,
+      src: p.src,
+      trend
+    };
+  });
+}
+
+// Weight-vs-goal pace chart (SVG) — driven by editable plan settings.
+// Raw weigh-ins are faint dots; the bold line is the smoothed 10-day trend, which
+// is the headline number so one heavy day doesn't read as real weight gain.
 function GoalChart({
   checkins,
-  settings
+  settings,
+  dailyWeights = []
 }) {
   const startD = planStartD0(settings.startDate);
   const startW = settings.startWeight;
   const goalW = settings.goalWeight;
   const target = parseLocalDate(settings.targetDate) || new Date();
-  const pts = checkins.map(c => ({
-    d: parseLocalDate(c.date),
-    w: c.weight
-  })).filter(p => p.d && !isNaN(p.w));
+  const series = ewmaTrend(weightSeries(checkins, dailyWeights));
   const dayMs = 1000 * 60 * 60 * 24;
   const totalDays = Math.max(1, (target - startD) / dayMs);
   const W = 320,
@@ -7777,17 +8361,19 @@ function GoalChart({
     padT = 14,
     padB = 22;
   const xs = d => padL + Math.min(1, Math.max(0, (d - startD) / dayMs / totalDays)) * (W - padL - padR);
-  const allW = [...pts.map(p => p.w), startW, goalW];
+  const allW = [...series.map(p => p.w), ...series.map(p => p.trend), startW, goalW];
   const minW = Math.floor(Math.min(...allW) - 1),
     maxW = Math.ceil(Math.max(...allW) + 1);
   const ys = w => padT + (maxW - w) / (maxW - minW || 1) * (H - padT - padB);
   const goalPath = `M${xs(startD).toFixed(1)},${ys(startW).toFixed(1)} L${xs(target).toFixed(1)},${ys(goalW).toFixed(1)}`;
-  const actualPts = pts.map(p => [xs(p.d), ys(p.w)]);
-  const actualPath = actualPts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const rawPts = series.map(p => [xs(p.d), ys(p.w)]);
+  const trendPts = series.map(p => [xs(p.d), ys(p.trend)]);
+  const trendPath = trendPts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
   const today = new Date();
   const clamped = today > target ? target : today < startD ? startD : today;
   const expected = startW + (goalW - startW) * ((clamped - startD) / dayMs / totalDays);
-  const cur = pts.length ? pts[pts.length - 1].w : startW;
+  const cur = series.length ? series[series.length - 1].trend : startW;
+  const rawNow = series.length ? series[series.length - 1].w : null;
   const onPace = cur <= expected + 0.2;
   const paceColor = onPace ? "#22C55E" : "#FFB020";
   return /*#__PURE__*/React.createElement("div", {
@@ -7840,20 +8426,25 @@ function GoalChart({
     stroke: "var(--faint)",
     strokeWidth: "1.5",
     strokeDasharray: "4 4"
-  }), actualPts.length > 1 && /*#__PURE__*/React.createElement("path", {
-    d: actualPath,
+  }), rawPts.map((p, i) => /*#__PURE__*/React.createElement("circle", {
+    key: "r" + i,
+    cx: p[0],
+    cy: p[1],
+    r: "2",
+    fill: "var(--faint)"
+  })), trendPts.length > 1 && /*#__PURE__*/React.createElement("path", {
+    d: trendPath,
     fill: "none",
     stroke: BLUE,
     strokeWidth: "2.5",
     strokeLinejoin: "round",
     strokeLinecap: "round"
-  }), actualPts.map((p, i) => /*#__PURE__*/React.createElement("circle", {
-    key: i,
-    cx: p[0],
-    cy: p[1],
-    r: "3",
+  }), trendPts.length > 0 && /*#__PURE__*/React.createElement("circle", {
+    cx: trendPts[trendPts.length - 1][0],
+    cy: trendPts[trendPts.length - 1][1],
+    r: "3.5",
     fill: BLUE
-  }))), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("div", {
     className: "flex justify-between mt-1 text-xs",
     style: {
       color: "var(--faint)"
@@ -7865,7 +8456,11 @@ function GoalChart({
     style: {
       color: "var(--faint)"
     }
-  }, "\u2014 \u2014 goal pace"), /*#__PURE__*/React.createElement("span", null, fmtDate(settings.targetDate, {
+  }, "\u2014 \u2014 goal \xB7 ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: BLUE
+    }
+  }, "\u2014"), " trend \xB7 \xB7 raw"), /*#__PURE__*/React.createElement("span", null, fmtDate(settings.targetDate, {
     month: "short",
     day: "numeric"
   }))), /*#__PURE__*/React.createElement("div", {
@@ -7873,17 +8468,291 @@ function GoalChart({
     style: {
       color: "var(--muted)"
     }
-  }, "Now ", /*#__PURE__*/React.createElement("span", {
+  }, "Trend ", /*#__PURE__*/React.createElement("span", {
     style: {
       color: "var(--text)",
       fontWeight: 700
     }
-  }, cur, " lb"), " \xB7 pace target today \u2248 ", /*#__PURE__*/React.createElement("span", {
+  }, cur.toFixed(1), " lb"), rawNow != null && Math.abs(rawNow - cur) >= 0.1 ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "var(--faint)"
+    }
+  }, " (last weigh-in ", rawNow.toFixed(1), ")") : null, " · ", "pace target today \u2248 ", /*#__PURE__*/React.createElement("span", {
     style: {
       color: paceColor,
       fontWeight: 700
     }
   }, expected.toFixed(1), " lb")));
+}
+
+// Strength trend for one lift: estimated 1RM over time as a line.
+// Same chart style as GoalChart. Defaults to the lift with the most sessions.
+function StrengthTrend({
+  strength = {}
+}) {
+  const names = Object.keys(strength).filter(n => (strength[n] || []).length);
+  // busiest lift first, so the picker defaults to the one he trains most
+  const ordered = names.slice().sort((a, b) => strength[b].length - strength[a].length);
+  const [sel, setSel] = useState(ordered[0] || null);
+  const name = sel && strength[sel] ? sel : ordered[0];
+  const arr = name && strength[name] || [];
+  const muscle = name ? trendMuscle(name) : "Chest";
+  const c = MUSCLE_COLORS[muscle] || BLUE;
+  const data = arr.map(a => a.e1rm);
+  const first = arr[0];
+  const last = arr[arr.length - 1];
+  const change = last && first ? last.e1rm - first.e1rm : 0;
+  const best = data.length ? Math.max(...data) : 0;
+
+  // Chart geometry — mirrors GoalChart
+  const W = 320,
+    H = 150,
+    padL = 34,
+    padR = 12,
+    padT = 14,
+    padB = 22;
+  const n = data.length;
+  const minV = Math.floor(Math.min(...data) - 2),
+    maxV = Math.ceil(Math.max(...data) + 2);
+  const xs = i => n <= 1 ? (padL + W - padR) / 2 : padL + i / (n - 1) * (W - padL - padR);
+  const ys = v => padT + (maxV - v) / (maxV - minV || 1) * (H - padT - padB);
+  const pts = data.map((v, i) => [xs(i), ys(v)]);
+  const linePath = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const changeColor = change > 0 ? "#22C55E" : change < 0 ? "#FF6B81" : "var(--muted2)";
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mb-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 overflow-x-auto pb-2 mb-3",
+    style: {
+      WebkitOverflowScrolling: "touch"
+    }
+  }, ordered.map(nm => {
+    const active = nm === name;
+    const mc = MUSCLE_COLORS[trendMuscle(nm)] || BLUE;
+    return /*#__PURE__*/React.createElement("button", {
+      key: nm,
+      onClick: () => setSel(nm),
+      className: "whitespace-nowrap px-3 py-1.5 text-xs font-bold tracking-wide active:scale-95 transition-transform",
+      style: {
+        borderRadius: 999,
+        color: active ? "#04120A" : "var(--muted)",
+        backgroundColor: active ? mc : "var(--bg)",
+        border: `1px solid ${active ? mc : "var(--border)"}`
+      }
+    }, nm);
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "px-4 py-4",
+    style: {
+      backgroundColor: "var(--card)",
+      borderRadius: 6,
+      border: "1px solid var(--border)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-baseline justify-between mb-1"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-lg font-extrabold leading-tight truncate",
+    style: {
+      color: "var(--text)",
+      fontFamily: FONT_HEAD
+    }
+  }, name), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs uppercase font-bold tracking-widest flex-shrink-0 ml-2",
+    style: {
+      color: c
+    }
+  }, "Est. 1RM")), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-baseline gap-2 mb-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-3xl font-extrabold",
+    style: {
+      color: c,
+      fontFamily: FONT_HEAD
+    }
+  }, best), /*#__PURE__*/React.createElement("span", {
+    className: "text-sm font-bold",
+    style: {
+      color: c
+    }
+  }, "lb best")), /*#__PURE__*/React.createElement("svg", {
+    width: "100%",
+    viewBox: `0 0 ${W} ${H}`,
+    style: {
+      overflow: "visible"
+    }
+  }, /*#__PURE__*/React.createElement("text", {
+    x: 2,
+    y: ys(maxV) + 4,
+    fontSize: "9",
+    fill: "var(--faint)"
+  }, maxV), /*#__PURE__*/React.createElement("text", {
+    x: 2,
+    y: ys(minV) + 4,
+    fontSize: "9",
+    fill: "var(--faint)"
+  }, minV), n > 1 && /*#__PURE__*/React.createElement("path", {
+    d: linePath,
+    fill: "none",
+    stroke: c,
+    strokeWidth: "2.5",
+    strokeLinejoin: "round",
+    strokeLinecap: "round"
+  }), pts.map((p, i) => /*#__PURE__*/React.createElement("circle", {
+    key: i,
+    cx: p[0],
+    cy: p[1],
+    r: "3",
+    fill: c
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between mt-1 text-xs",
+    style: {
+      color: "var(--faint)"
+    }
+  }, /*#__PURE__*/React.createElement("span", null, first ? first.date : ""), /*#__PURE__*/React.createElement("span", null, last && arr.length > 1 ? last.date : "")), /*#__PURE__*/React.createElement("div", {
+    className: "text-sm mt-2",
+    style: {
+      color: "var(--muted)"
+    }
+  }, arr.length < 2 ? /*#__PURE__*/React.createElement(React.Fragment, null, "One session logged \u2014 the trend line builds as you log more.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: changeColor,
+      fontWeight: 700
+    }
+  }, change > 0 ? "+" : "", change, " lb"), " since you started this lift", " ", "(", arr.length, " sessions)"))));
+}
+
+// Monday that starts the week containing date `d` (local, midnight)
+function startOfWeekMon(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diff = (x.getDay() + 6) % 7; // days since Monday (getDay: 0=Sun..6=Sat)
+  x.setDate(x.getDate() - diff);
+  return x;
+}
+// Muscles we count for weekly hard-set volume — everything but conditioning
+const VOLUME_MUSCLES = MUSCLE_ORDER.filter(m => m !== "Cardio");
+
+// Hard sets per muscle group for the current week, vs the 10–20 set target band.
+// Counts only completed (ticked) working sets logged from this Monday onward.
+function WeeklyVolume({
+  logs = []
+}) {
+  const weekStart = startOfWeekMon(new Date());
+  const weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 7);
+  const counts = {};
+  VOLUME_MUSCLES.forEach(m => counts[m] = 0);
+  let total = 0;
+  (logs || []).forEach(log => {
+    const d = new Date(log.date);
+    if (isNaN(d.getTime()) || d < weekStart || d >= weekEnd) return;
+    (log.detail || []).forEach(ex => {
+      const done = (ex.sets || []).filter(s => s && s.done && !s.warmup).length; // warm-ups aren't hard sets
+      if (!done) return;
+      const m = ex.muscle;
+      if (counts[m] == null) return; // Cardio / unknown — not a hard-set muscle
+      counts[m] += done;
+      total += done;
+    });
+  });
+  const rangeLabel = `${weekStart.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric"
+  })} – ${new Date(weekEnd - 1).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric"
+  })}`;
+  if (total === 0) {
+    return /*#__PURE__*/React.createElement(EmptyState, {
+      icon: "\uD83D\uDCCA",
+      title: "No sets logged this week",
+      sub: "Tick sets complete in a workout and your weekly volume per muscle builds here, against a 10\u201320 set target."
+    });
+  }
+  const maxCount = Math.max(...VOLUME_MUSCLES.map(m => counts[m]));
+  const scale = Math.max(22, Math.ceil(maxCount / 2) * 2); // headroom past the 20-set top of the band
+  const bandLo = 10 / scale * 100;
+  const bandHi = 20 / scale * 100;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mb-6"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-sm mb-3",
+    style: {
+      color: "var(--muted2)",
+      lineHeight: 1.5
+    }
+  }, "Completed hard sets per muscle this week (", rangeLabel, "). The shaded band is the", " ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "var(--text2)",
+      fontWeight: 700
+    }
+  }, "10\u201320 sets"), " weekly target for growth."), /*#__PURE__*/React.createElement("div", {
+    className: "px-4 py-4 flex flex-col gap-2.5",
+    style: {
+      backgroundColor: "var(--card)",
+      borderRadius: 6,
+      border: "1px solid var(--border)"
+    }
+  }, VOLUME_MUSCLES.map(m => {
+    const v = counts[m];
+    const c = MUSCLE_COLORS[m] || BLUE;
+    const status = v === 0 ? "none" : v < 10 ? "low" : v <= 20 ? "on" : "high";
+    const numColor = status === "on" ? "#22C55E" : status === "high" ? "#FFB020" : "var(--muted)";
+    return /*#__PURE__*/React.createElement("div", {
+      key: m,
+      className: "flex items-center gap-2"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-xs font-bold uppercase tracking-wide flex-shrink-0",
+      style: {
+        width: 62,
+        color: c
+      }
+    }, m), /*#__PURE__*/React.createElement("div", {
+      className: "flex-1",
+      style: {
+        position: "relative",
+        height: 20,
+        backgroundColor: "var(--bg)",
+        borderRadius: 4,
+        overflow: "hidden"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute",
+        top: 0,
+        height: "100%",
+        left: `${bandLo}%`,
+        width: `${bandHi - bandLo}%`,
+        backgroundColor: "var(--toggleoff)",
+        opacity: 0.35
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        position: "absolute",
+        top: 0,
+        height: "100%",
+        left: 0,
+        width: `${Math.min(100, v / scale * 100)}%`,
+        backgroundColor: c,
+        borderRadius: 4
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      className: "text-sm font-extrabold flex-shrink-0 text-right",
+      style: {
+        width: 24,
+        color: numColor,
+        fontFamily: FONT_HEAD
+      }
+    }, v));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs mt-2",
+    style: {
+      color: "var(--faint)",
+      lineHeight: 1.5
+    }
+  }, total, " hard ", total === 1 ? "set" : "sets", " so far this week. ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#22C55E",
+      fontWeight: 700
+    }
+  }, "Green"), " is in the target band; muscles that fall short could use another session."));
 }
 
 // ============================================================
@@ -7892,10 +8761,12 @@ function GoalChart({
 function Progress({
   checkins = [],
   strength = {},
+  logs = [],
   onExport,
   onImport,
   onReset,
-  settings = DEFAULT_SETTINGS
+  settings = DEFAULT_SETTINGS,
+  dailyWeights = []
 }) {
   const hasTrend = checkins.length >= 2;
   const strengthNames = Object.keys(strength);
@@ -7903,7 +8774,8 @@ function Progress({
     className: "px-4 pb-28 pt-4"
   }, /*#__PURE__*/React.createElement(SectionTitle, null, "Goal Pace"), /*#__PURE__*/React.createElement(GoalChart, {
     checkins: checkins,
-    settings: settings
+    settings: settings,
+    dailyWeights: dailyWeights
   }), /*#__PURE__*/React.createElement(SectionTitle, null, "Body Composition"), /*#__PURE__*/React.createElement("div", {
     className: "text-sm mb-4",
     style: {
@@ -8012,72 +8884,11 @@ function Progress({
     icon: "\uD83C\uDFCB\uFE0F",
     title: "No lifts logged yet",
     sub: "Finish a workout with weight and reps and your strength trend per lift builds here."
-  }) : /*#__PURE__*/React.createElement("div", {
-    className: "flex flex-col gap-3 mb-6"
-  }, strengthNames.map(name => {
-    const arr = strength[name];
-    const data = arr.map(a => a.e1rm);
-    const best = Math.max(...data);
-    const first = data[0];
-    const gain = best - first;
-    const muscle = trendMuscle(name);
-    const c = MUSCLE_COLORS[muscle] || BLUE;
-    return /*#__PURE__*/React.createElement("div", {
-      key: name,
-      className: "flex items-center px-4 py-3",
-      style: {
-        backgroundColor: "var(--card)",
-        borderRadius: 6,
-        border: "1px solid var(--border)"
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "flex-1 min-w-0"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "text-lg font-extrabold leading-tight truncate",
-      style: {
-        color: "var(--text)",
-        fontFamily: FONT_HEAD
-      }
-    }, name), /*#__PURE__*/React.createElement("div", {
-      className: "flex items-center gap-2 mt-1"
-    }, /*#__PURE__*/React.createElement(MuscleTag, {
-      muscle: muscle,
-      small: true
-    }), gain > 0 && /*#__PURE__*/React.createElement("span", {
-      className: "text-xs font-semibold",
-      style: {
-        color: "#22C55E"
-      }
-    }, "+", gain, " lb")), /*#__PURE__*/React.createElement("div", {
-      className: "mt-2"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: "text-xs uppercase tracking-widest font-bold",
-      style: {
-        color: "var(--muted2)"
-      }
-    }, "Best 1RM "), /*#__PURE__*/React.createElement("span", {
-      className: "text-2xl font-extrabold",
-      style: {
-        color: c,
-        fontFamily: FONT_HEAD
-      }
-    }, best), /*#__PURE__*/React.createElement("span", {
-      className: "text-sm font-bold",
-      style: {
-        color: c
-      }
-    }, " lb"))), /*#__PURE__*/React.createElement("div", {
-      className: "ml-2 flex-shrink-0"
-    }, data.length >= 2 ? /*#__PURE__*/React.createElement(Sparkline, {
-      data: data,
-      color: c
-    }) : /*#__PURE__*/React.createElement("span", {
-      className: "text-xs",
-      style: {
-        color: "var(--faint)"
-      }
-    }, "\u2014")));
-  })), /*#__PURE__*/React.createElement(SectionTitle, null, "Data & Backup"), /*#__PURE__*/React.createElement("div", {
+  }) : /*#__PURE__*/React.createElement(StrengthTrend, {
+    strength: strength
+  }), /*#__PURE__*/React.createElement(SectionTitle, null, "Weekly Volume"), /*#__PURE__*/React.createElement(WeeklyVolume, {
+    logs: logs
+  }), /*#__PURE__*/React.createElement(SectionTitle, null, "Data & Backup"), /*#__PURE__*/React.createElement("div", {
     className: "flex flex-col gap-2"
   }, /*#__PURE__*/React.createElement("button", {
     onClick: onExport,
@@ -8314,15 +9125,15 @@ function SessionDetail({
   if (!log) return null;
   const prs = log.prs || [];
   const meta = [log.date, log.gym, log.duration, `${log.sets} sets`, log.rating ? `${log.rating}/10` : null, log.partial ? "partial" : null].filter(Boolean).join(" · ");
-  return /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", _extends({
     className: "fixed inset-0 z-50",
-    ref: swipe.ref,
-    ...swipe.handlers,
+    ref: swipe.ref
+  }, swipe.handlers, {
     style: {
       backgroundColor: "var(--bg)",
       overflowY: "auto"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     className: "sticky top-0 z-10 flex items-center gap-3 px-4 py-3",
     style: {
       backgroundColor: "var(--bg)",
@@ -8702,15 +9513,15 @@ function ExerciseGuide({
   const level = cat ? cat.level : null;
   const equipment = cat ? cat.equipment : null;
   const c = MUSCLE_COLORS[muscle] || BLUE;
-  return /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", _extends({
     className: "fixed inset-0 z-50",
-    ref: swipe.ref,
-    ...swipe.handlers,
+    ref: swipe.ref
+  }, swipe.handlers, {
     style: {
       backgroundColor: "var(--bg)",
       overflowY: "auto"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     className: "sticky top-0 z-10 flex items-center gap-3 px-4 py-3",
     style: {
       backgroundColor: "var(--bg)",
@@ -9684,9 +10495,13 @@ function PlanSettings({
     on: s.restAutoStart,
     onToggle: () => set("restAutoStart", !s.restAutoStart)
   }), /*#__PURE__*/React.createElement(ToggleRow, {
-    label: "Sound & vibration",
+    label: "Rest-timer sound",
     on: s.restSound,
     onToggle: () => set("restSound", !s.restSound)
+  }), /*#__PURE__*/React.createElement(ToggleRow, {
+    label: "Vibration (buzz on set & rest done)",
+    on: s.haptics,
+    onToggle: () => set("haptics", !s.haptics)
   })));
 }
 
@@ -10884,6 +11699,8 @@ function App() {
   const [toast, setToast] = useState("");
   const [guide, setGuide] = useState(null);
   const [detailLog, setDetailLog] = useState(null);
+  const [undo, setUndo] = useState(null); // { message, restore, resume } — offered briefly after finishing / discarding
+  const [resumeSession, setResumeSession] = useState(null); // seeds Workout when re-opened via Undo (consumed on mount)
   const [menuOpen, setMenuOpen] = useState(false);
   const [showTest, setShowTest] = useState(false); // strength calibration overlay
   const [nowHour, setNowHour] = useState(() => new Date().getHours()); // for "auto" theme (day/night)
@@ -10895,6 +11712,7 @@ function App() {
   const [perf, setPerf] = useState(() => loadStore()?.perf || {}); // exercise name -> { load, dir, from }
   const [logs, setLogs] = useState(() => loadStore()?.logs || []); // completed sessions, newest first
   const [checkins, setCheckins] = useState(() => loadStore()?.checkins || [BASELINE_CHECKIN]); // body scans over time
+  const [dailyWeights, setDailyWeights] = useState(() => loadStore()?.dailyWeights || []); // optional daily scale weigh-ins: [{date:"YYYY-MM-DD", weight}]
   const [weekFocus, setWeekFocus] = useState(() => loadStore()?.weekFocus || null); // this week's tailored focus
   const [strength, setStrength] = useState(() => loadStore()?.strength || {}); // exercise -> [{date,weight,reps,e1rm}]
   const [weekPlan, setWeekPlan] = useState(() => loadStore()?.weekPlan || newWeekPlan("")); // this week's session statuses
@@ -10924,6 +11742,7 @@ function App() {
       perf,
       logs,
       checkins,
+      dailyWeights,
       weekFocus,
       strength,
       weekPlan,
@@ -10935,7 +11754,7 @@ function App() {
       nutritionLog,
       onboarded
     });
-  }, [perf, logs, checkins, weekFocus, strength, weekPlan, prefs, gyms, activeGymId, settings, plan, nutritionLog, onboarded]);
+  }, [perf, logs, checkins, dailyWeights, weekFocus, strength, weekPlan, prefs, gyms, activeGymId, settings, plan, nutritionLog, onboarded]);
   const logNutrition = (day, key, value) => setNutritionLog(prev => ({
     ...prev,
     [day]: {
@@ -10955,7 +11774,27 @@ function App() {
       document.head.appendChild(link);
     }
   }, []);
+
+  // The Undo offer expires on its own after a few seconds
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => setUndo(null), 8000);
+    return () => clearTimeout(t);
+  }, [undo]);
+  const doUndo = () => {
+    if (!undo) return;
+    if (undo.restore) undo.restore(); // put the tuned weights / logs / PRs back
+    if (undo.resume) {
+      // re-open the exact session to keep editing
+      setResumeSession(undo.resume);
+      setActiveDay(undo.resume.day);
+      setTab("workout");
+    }
+    setUndo(null);
+  };
   const launch = day => {
+    setUndo(null);
+    setResumeSession(null); // a fresh launch is never a resume
     if (day.kind === "checkin") {
       setTab("checkin");
       return;
@@ -11066,6 +11905,21 @@ function App() {
     setToast("✨ Re-optimized for " + n + " days a week");
     setTimeout(() => setToast(""), 3600);
   };
+  const logDailyWeight = weight => {
+    const n = parseFloat(weight);
+    if (isNaN(n) || n <= 0) return;
+    const today = isoDay();
+    setDailyWeights(prev => {
+      const rounded = Math.round(n * 10) / 10;
+      const rest = (prev || []).filter(e => e.date !== today); // replace today's entry if it exists
+      return [...rest, {
+        date: today,
+        weight: rounded
+      }].sort((a, b) => a.date < b.date ? -1 : 1);
+    });
+    setToast(`⚖️ Logged ${Math.round(n * 10) / 10} lb`);
+    setTimeout(() => setToast(""), 2500);
+  };
   const saveCheckin = entry => {
     const dateStr = new Date().toLocaleDateString("en-US", {
       month: "short",
@@ -11091,6 +11945,16 @@ function App() {
     setTimeout(() => setToast(""), 5000);
   };
   const finish = summary => {
+    // Snapshot everything this finish is about to change, so Undo can put it all
+    // back (weights un-tuned, the logged session removed, PRs & prefs reverted).
+    const snapshot = {
+      perf,
+      strength,
+      prefs,
+      logs,
+      weekPlan
+    };
+
     // 1) Tune each exercise's suggested weight from actual load + how it felt
     setPerf(prev => {
       const next = {
@@ -11099,12 +11963,13 @@ function App() {
       (summary.exercises || []).forEach(ex => {
         const base = ex.logged != null ? ex.logged : parseLoad(ex.targetLoad);
         if (base == null) return; // bodyweight / cardio — nothing to tune
-        const nl = nextLoad(base, ex.feedback);
+        const nl = nextLoad(base, ex.feedback, ex.rir);
         const dir = nl > base ? "up" : nl < base ? "down" : "same";
         next[ex.name] = {
           load: `${nl} lb${ex.each ? " each" : ""}`,
           dir,
-          from: base
+          from: base,
+          reps: ex.bestReps ?? null
         };
       });
       return next;
@@ -11178,9 +12043,20 @@ function App() {
       setWeekPlan(wp => setSessionStatus(wp, summary.day.id, complete ? "done" : "partial"));
     }
     setActiveDay(null);
+    setResumeSession(null);
     setTab("history");
-    setToast(prNames.length ? `🏆 New PR — ${prNames.join(", ")}! ${summary.day.name} logged` : complete ? `💪 ${summary.day.name} logged${summary.rating ? ` · rated ${summary.rating}/10` : ""} — weights tuned` : `✔ Partial ${summary.day.name} saved — still counts, do the rest anytime`);
-    setTimeout(() => setToast(""), 4200);
+    // The Undo bar carries the confirmation message and a one-tap revert
+    setUndo({
+      message: prNames.length ? `🏆 New PR — ${prNames.join(", ")}! ${summary.day.name} logged` : complete ? `💪 ${summary.day.name} logged${summary.rating ? ` · rated ${summary.rating}/10` : ""} — weights tuned` : `✔ Partial ${summary.day.name} saved`,
+      restore: () => {
+        setPerf(snapshot.perf);
+        setStrength(snapshot.strength);
+        setPrefs(snapshot.prefs);
+        setLogs(snapshot.logs);
+        setWeekPlan(snapshot.weekPlan);
+      },
+      resume: summary.raw
+    });
   };
 
   // ---- Backup / export / import / reset ----
@@ -11190,6 +12066,7 @@ function App() {
         perf,
         logs,
         checkins,
+        dailyWeights,
         weekFocus,
         strength,
         weekPlan,
@@ -11227,6 +12104,7 @@ function App() {
         if (d.perf) setPerf(d.perf);
         if (d.logs) setLogs(d.logs);
         if (d.checkins) setCheckins(d.checkins);
+        if (d.dailyWeights) setDailyWeights(d.dailyWeights);
         if ("weekFocus" in d) setWeekFocus(d.weekFocus);
         if (d.strength) setStrength(d.strength);
         if (d.weekPlan) setWeekPlan(d.weekPlan);
@@ -11256,6 +12134,7 @@ function App() {
     setPerf({});
     setLogs([]);
     setCheckins([BASELINE_CHECKIN]);
+    setDailyWeights([]);
     setWeekFocus(null);
     setStrength({});
     setWeekPlan(newWeekPlan(""));
@@ -11267,9 +12146,17 @@ function App() {
     setToast("All data reset");
     setTimeout(() => setToast(""), 2500);
   };
-  const discard = () => {
+  const discard = raw => {
     setActiveDay(null);
+    setResumeSession(null);
     setTab("dashboard");
+    // Only worth an Undo if he'd actually logged something in the session
+    const hasWork = raw && (raw.exercises || []).some(ex => (ex.sets || []).some(s => s.done || s.weight || s.reps));
+    if (hasWork) setUndo({
+      message: "Workout discarded",
+      restore: null,
+      resume: raw
+    });
   };
 
   // If on workout tab but no active day, default to the first training day (not the check-in)
@@ -11297,8 +12184,7 @@ function App() {
   useEffect(() => {
     if (typeof document !== "undefined") document.body.style.backgroundColor = pal.bg;
   }, [pal.bg]);
-  return /*#__PURE__*/React.createElement("div", {
-    ...pageSwipe.handlers,
+  return /*#__PURE__*/React.createElement("div", _extends({}, pageSwipe.handlers, {
     style: {
       ...themeVarsFor(pal),
       backgroundColor: "var(--bg)",
@@ -11307,7 +12193,7 @@ function App() {
       color: "var(--text)",
       paddingTop: "env(safe-area-inset-top)"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     ref: pageSwipe.ref
   }, /*#__PURE__*/React.createElement("div", {
     className: "px-4 pt-4 pb-4",
@@ -11435,7 +12321,10 @@ function App() {
     settings: settings,
     nutrition: nutrition,
     nutritionToday: nutritionLog[todayKey()] || {},
-    onGoNutrition: () => setTab("nutrition")
+    onGoNutrition: () => setTab("nutrition"),
+    checkins: checkins,
+    dailyWeights: dailyWeights,
+    onLogWeight: logDailyWeight
   }), tab === "calendar" && /*#__PURE__*/React.createElement(Calendar, {
     onLaunch: launch,
     logs: logs,
@@ -11447,10 +12336,13 @@ function App() {
     onDiscard: discard,
     onOpenGuide: setGuide,
     perf: perf,
+    strength: strength,
     settings: settings,
     gyms: gyms,
     activeGymId: activeGymId,
-    onGymChange: setActiveGymId
+    onGymChange: setActiveGymId,
+    resume: resumeSession,
+    onResumeConsumed: () => setResumeSession(null)
   }), tab === "history" && /*#__PURE__*/React.createElement(History, {
     logs: logs,
     onStart: () => launch(PLAN.find(p => p.kind !== "checkin") || PLAN[0]),
@@ -11458,10 +12350,12 @@ function App() {
   }), tab === "progress" && /*#__PURE__*/React.createElement(Progress, {
     checkins: checkins,
     strength: strength,
+    logs: logs,
     onExport: exportData,
     onImport: importData,
     onReset: resetData,
-    settings: settings
+    settings: settings,
+    dailyWeights: dailyWeights
   }), tab === "checkin" && /*#__PURE__*/React.createElement(CheckIn, {
     last: checkins[checkins.length - 1],
     onSave: saveCheckin,
@@ -11495,7 +12389,7 @@ function App() {
     nutrition: nutrition,
     log: nutritionLog,
     onLog: logNutrition
-  })), toast && /*#__PURE__*/React.createElement("div", {
+  })), toast && !undo && /*#__PURE__*/React.createElement("div", {
     className: "fixed left-4 right-4 z-50 px-4 py-3 text-center text-sm font-bold",
     style: {
       bottom: 24,
@@ -11504,7 +12398,36 @@ function App() {
       borderRadius: 6,
       boxShadow: "0 8px 24px rgba(47,128,255,0.35)"
     }
-  }, toast), onboarded && !menuOpen && !guide && !detailLog && !showTest && /*#__PURE__*/React.createElement("button", {
+  }, toast), undo && /*#__PURE__*/React.createElement("div", {
+    className: "fixed left-4 right-4 z-50 flex items-center gap-3 pl-4 pr-2 py-2.5",
+    style: {
+      bottom: 24,
+      backgroundColor: "var(--panel)",
+      border: "1px solid var(--toggleoff)",
+      borderRadius: 8,
+      boxShadow: "0 8px 24px rgba(0,0,0,0.45)"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-sm font-bold flex-1",
+    style: {
+      color: "var(--text)"
+    }
+  }, undo.message), /*#__PURE__*/React.createElement("button", {
+    onClick: doUndo,
+    className: "px-4 py-2 text-sm font-extrabold uppercase tracking-wider active:scale-95 transition-transform flex-shrink-0",
+    style: {
+      color: "#04120A",
+      backgroundColor: BLUE,
+      borderRadius: 6
+    }
+  }, "Undo"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setUndo(null),
+    "aria-label": "Dismiss",
+    className: "px-2 py-2 text-lg active:opacity-60 flex-shrink-0",
+    style: {
+      color: "var(--muted)"
+    }
+  }, "\u2715")), onboarded && !menuOpen && !guide && !detailLog && !showTest && /*#__PURE__*/React.createElement("button", {
     onClick: () => setMenuOpen(true),
     "aria-label": "Open navigation menu",
     style: {
@@ -11554,4 +12477,18 @@ function App() {
   }));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));}catch(e){document.getElementById('root').innerHTML='<div style="color:#fff;font-family:sans-serif;padding:24px">App error: '+e.message+'</div>';}</script>
+<script>
+/* Offline support. Only over https (the live site) — not on the http dev server,
+ * where service workers aren't allowed anyway and would only fight live-reload. */
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+      reg.update();
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') reg.update();
+      });
+    }).catch(function () {});
+  });
+}
+</script>
 </body></html>
