@@ -4988,6 +4988,16 @@ function isBarbellLift(name) {
   const c = CATALOG.find(x => x.name === name);
   return !!(c && Array.isArray(c.equip) && c.equip.includes("barbell"));
 }
+// "Hold for time" moves — planks and mountain climbers. Their "reps" box logs the
+// SECONDS you actually lasted, not a rep count, since time is the real progress read.
+function isTimedHold(name) {
+  return /plank hold|mountain climbers/i.test(name || "");
+}
+// Pull the target seconds out of a reps prescription like "45s hold" or "40s" → 45 / 40
+function targetSecs(reps) {
+  const m = String(reps || "").match(/(\d+)\s*s/i);
+  return m ? m[1] : null;
+}
 // Highest weight actually logged across a set list
 function maxLogged(sets) {
   let mx = null;
@@ -7354,9 +7364,11 @@ function Workout({
   // Turn a resolved day into editable session rows (carries tuned loads / ease-back)
   const buildSession = d => (d.exercises || []).map((ex, i) => {
     const rec = perf[ex.name];
+    const timed = isTimedHold(ex.name); // logs seconds held, not reps × weight
     const eachSuffix = /each/i.test(ex.load || "") ? " each" : "";
-    const load = rec ? d.easeBack ? `${rec.from} lb${eachSuffix}` : rec.load : ex.load;
-    const adjusted = rec && !d.easeBack ? rec.dir : null;
+    // Timed holds keep their plain prescription (e.g. "Bodyweight") — no weight to tune.
+    const load = timed ? ex.load : rec ? d.easeBack ? `${rec.from} lb${eachSuffix}` : rec.load : ex.load;
+    const adjusted = timed ? null : rec && !d.easeBack ? rec.dir : null;
     return {
       key: `${ex.name}-${i}`,
       name: ex.name,
@@ -7374,9 +7386,9 @@ function Workout({
       sets: Array.from({
         length: ex.sets
       }, () => ({
-        prev: rec ? `last: ${rec.from} lb` : "—",
-        prevWeight: rec && rec.from != null ? rec.from : null,
-        prevReps: rec && rec.reps != null ? rec.reps : null,
+        prev: timed ? rec && rec.secs != null ? `last: ${rec.secs}s` : "—" : rec ? `last: ${rec.from} lb` : "—",
+        prevWeight: timed ? null : rec && rec.from != null ? rec.from : null,
+        prevReps: timed ? rec && rec.secs != null ? rec.secs : null : rec && rec.reps != null ? rec.reps : null,
         weight: "",
         reps: "",
         done: false
@@ -7943,7 +7955,7 @@ function Workout({
         gridTemplateColumns: "34px 1fr 1fr 1fr 44px",
         gap: "6px"
       }
-    }, /*#__PURE__*/React.createElement("div", null, "Set"), /*#__PURE__*/React.createElement("div", null, "Prev"), /*#__PURE__*/React.createElement("div", null, "Lbs"), /*#__PURE__*/React.createElement("div", null, "Reps"), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("div", null, "Set"), /*#__PURE__*/React.createElement("div", null, "Prev"), /*#__PURE__*/React.createElement("div", null, "Lbs"), /*#__PURE__*/React.createElement("div", null, isTimedHold(ex.name) ? "Secs" : "Reps"), /*#__PURE__*/React.createElement("div", {
       className: "text-center"
     }, "\u2713")), ex.sets.map((st, setI) => /*#__PURE__*/React.createElement(SwipeRow, {
       key: setI,
@@ -7972,7 +7984,7 @@ function Workout({
         minHeight: 34
       },
       title: "Tap to fill this row with last time's numbers"
-    }, st.prevReps != null ? `${st.prevWeight}×${st.prevReps}` : `${st.prevWeight} lb`) : /*#__PURE__*/React.createElement("div", {
+    }, st.prevWeight == null ? `${st.prevReps}s` : st.prevReps != null ? `${st.prevWeight}×${st.prevReps}` : `${st.prevWeight} lb`) : /*#__PURE__*/React.createElement("div", {
       className: "text-sm",
       style: {
         color: "var(--faint)"
@@ -7994,7 +8006,7 @@ function Workout({
       inputMode: "numeric",
       value: st.reps,
       onChange: e => setField(exI, setI, "reps", e.target.value),
-      placeholder: st.prevReps != null ? String(st.prevReps) : "—",
+      placeholder: st.prevReps != null ? String(st.prevReps) : isTimedHold(ex.name) ? targetSecs(ex.target.reps) || "—" : "—",
       className: "w-full px-2 py-1.5 text-base font-bold outline-none",
       style: {
         backgroundColor: "var(--bg)",
@@ -8365,6 +8377,12 @@ function Workout({
           each: /each/i.test(ex.target.load || ""),
           bestWeight: b ? b.weight : null,
           bestReps: b ? b.reps : null,
+          // Longest hold logged this session (seconds), for timed moves like planks
+          bestSecs: isTimedHold(ex.name) ? ex.sets.reduce((mx, s) => {
+            if (s.warmup || !s.done) return mx;
+            const v = parseFloat(s.reps);
+            return isNaN(v) ? mx : Math.max(mx, v);
+          }, null) : null,
           sets: ex.sets.map(s => ({
             weight: s.weight,
             reps: s.reps,
@@ -12631,6 +12649,15 @@ function App() {
         ...prev
       };
       (summary.exercises || []).forEach(ex => {
+        // Timed holds carry no weight — just remember the longest hold so next
+        // session shows it as the number to beat.
+        if (isTimedHold(ex.name)) {
+          if (ex.bestSecs != null) next[ex.name] = {
+            ...(next[ex.name] || {}),
+            secs: ex.bestSecs
+          };
+          return;
+        }
         const base = ex.logged != null ? ex.logged : parseLoad(ex.targetLoad);
         if (base == null) return; // bodyweight / cardio — nothing to tune
         const nl = nextLoad(base, ex.feedback, ex.rir);
