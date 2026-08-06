@@ -1309,7 +1309,8 @@ const BODYCOMP_METRICS = [{
   good: "down",
   decimals: 1,
   color: "#2F80FF",
-  group: "Body Mass"
+  group: "Body Mass",
+  info: "Your total body weight on the scale — muscle, fat, water, bone and everything else combined."
 }, {
   key: "bmi",
   label: "BMI",
@@ -1317,7 +1318,8 @@ const BODYCOMP_METRICS = [{
   good: "down",
   decimals: 1,
   color: "#4C9AFF",
-  group: "Body Mass"
+  group: "Body Mass",
+  info: "Body Mass Index — your weight compared to your height. It's a rough health screen and can't tell muscle from fat, so don't read too much into it on its own."
 }, {
   key: "bodyFat",
   label: "Body Fat",
@@ -1325,7 +1327,8 @@ const BODYCOMP_METRICS = [{
   good: "down",
   decimals: 1,
   color: "#FF7A45",
-  group: "Fat"
+  group: "Fat",
+  info: "The percentage of your total weight that is fat. Drifting down while your muscle holds is the goal of a recomp."
 }, {
   key: "fatMass",
   label: "Fat Mass",
@@ -1333,7 +1336,8 @@ const BODYCOMP_METRICS = [{
   good: "down",
   decimals: 1,
   color: "#FF9F1C",
-  group: "Fat"
+  group: "Fat",
+  info: "The actual pounds of fat on your body — the number behind your body-fat percentage."
 }, {
   key: "subcutaneous",
   label: "Subcutaneous Fat",
@@ -1341,7 +1345,8 @@ const BODYCOMP_METRICS = [{
   good: "down",
   decimals: 1,
   color: "#FFB020",
-  group: "Fat"
+  group: "Fat",
+  info: "The soft fat that sits just under your skin — the kind you can pinch. Most of your body fat is this kind."
 }, {
   key: "visceral",
   label: "Visceral Fat",
@@ -1349,7 +1354,8 @@ const BODYCOMP_METRICS = [{
   good: "down",
   decimals: 0,
   color: "#FF4D8D",
-  group: "Fat"
+  group: "Fat",
+  info: "The deep belly fat wrapped around your internal organs. You can't pinch it, and too much raises health risks — so lower is better. Scales report it as a rating, not pounds."
 }, {
   key: "muscle",
   label: "Muscle Mass",
@@ -1357,7 +1363,8 @@ const BODYCOMP_METRICS = [{
   good: "up",
   decimals: 1,
   color: "#00E5C0",
-  group: "Muscle & Protein"
+  group: "Muscle & Protein",
+  info: "The total pounds of muscle on your body. Holding or building this while fat drops is exactly what you want."
 }, {
   key: "muscleRate",
   label: "Muscle Rate",
@@ -1365,7 +1372,8 @@ const BODYCOMP_METRICS = [{
   good: "up",
   decimals: 1,
   color: "#00C2A8",
-  group: "Muscle & Protein"
+  group: "Muscle & Protein",
+  info: "The percentage of your total weight that is muscle. It climbs as you gain muscle or lose fat."
 }, {
   key: "skeletal",
   label: "Skeletal Muscle",
@@ -1373,7 +1381,8 @@ const BODYCOMP_METRICS = [{
   good: "up",
   decimals: 1,
   color: "#22C55E",
-  group: "Muscle & Protein"
+  group: "Muscle & Protein",
+  info: "The muscle attached to your bones that moves your body — the muscle you actually build by lifting weights."
 }, {
   key: "proteinMass",
   label: "Protein Mass",
@@ -1381,7 +1390,8 @@ const BODYCOMP_METRICS = [{
   good: "up",
   decimals: 1,
   color: "#7A5CFF",
-  group: "Muscle & Protein"
+  group: "Muscle & Protein",
+  info: "The pounds of protein in your body, most of it stored inside your muscle. It rises as you build muscle."
 }, {
   key: "protein",
   label: "Protein",
@@ -1389,7 +1399,8 @@ const BODYCOMP_METRICS = [{
   good: "up",
   decimals: 1,
   color: "#9A7CFF",
-  group: "Muscle & Protein"
+  group: "Muscle & Protein",
+  info: "The percentage of your body weight made up of protein — another read on how much muscle you're carrying."
 }, {
   key: "waterWeight",
   label: "Water Weight",
@@ -1397,7 +1408,8 @@ const BODYCOMP_METRICS = [{
   good: "neutral",
   decimals: 1,
   color: "#00C2FF",
-  group: "Water & Bone"
+  group: "Water & Bone",
+  info: "The pounds of water in your body. It swings day to day with salt, carbs and hydration, so treat big jumps as noise, not fat gained."
 }, {
   key: "bodyWater",
   label: "Body Water",
@@ -1405,7 +1417,8 @@ const BODYCOMP_METRICS = [{
   good: "up",
   decimals: 1,
   color: "#38BDF8",
-  group: "Water & Bone"
+  group: "Water & Bone",
+  info: "The percentage of your body that is water. Staying well hydrated keeps this steady and your readings more reliable."
 }, {
   key: "bone",
   label: "Bone Mass",
@@ -1413,7 +1426,8 @@ const BODYCOMP_METRICS = [{
   good: "neutral",
   decimals: 1,
   color: "var(--muted)",
-  group: "Water & Bone"
+  group: "Water & Bone",
+  info: "The estimated weight of the minerals in your bones. It changes very slowly, so expect this number to stay roughly flat."
 }, {
   key: "bmr",
   label: "BMR",
@@ -1421,7 +1435,8 @@ const BODYCOMP_METRICS = [{
   good: "neutral",
   decimals: 0,
   color: "#FFD23F",
-  group: "Metabolic"
+  group: "Metabolic",
+  info: "Basal Metabolic Rate — the calories your body burns in a day at complete rest, just to keep you alive. More muscle nudges this up."
 }, {
   key: "bodyAge",
   label: "Body Age",
@@ -1429,7 +1444,8 @@ const BODYCOMP_METRICS = [{
   good: "down",
   decimals: 0,
   color: "#F471B5",
-  group: "Metabolic"
+  group: "Metabolic",
+  info: "A fitness “age” the scale estimates from your body composition. Lower than your real age is the goal."
 }, {
   key: "whr",
   label: "Waist-to-Hip (WHR)",
@@ -1437,7 +1453,8 @@ const BODYCOMP_METRICS = [{
   good: "down",
   decimals: 2,
   color: "#F59E0B",
-  group: "Metabolic"
+  group: "Metabolic",
+  info: "Your waist measurement divided by your hips — a simple marker of where you carry fat. Lower generally means less risky belly fat."
 }];
 
 // ---- Conditioning moves (for the catalog) ----
@@ -7172,6 +7189,111 @@ function SectionTitle({
   }, children);
 }
 
+// A tap-to-reveal "ⓘ" icon that pops up a plain-language explanation.
+// Built for a thumb on a phone: tap to open, tap the icon or anywhere else to close.
+// The popup is positioned from the icon's real screen spot so it never runs off
+// the edge of a narrow phone.
+function InfoTip({
+  text,
+  title,
+  color = "var(--muted)"
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const toggle = e => {
+    e.stopPropagation();
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const r = btnRef.current ? btnRef.current.getBoundingClientRect() : null;
+    if (r) {
+      const margin = 12;
+      const width = Math.min(280, window.innerWidth - margin * 2);
+      // keep the box on-screen: start under the icon, then clamp to the viewport
+      let left = r.left;
+      if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width;
+      if (left < margin) left = margin;
+      setPos({
+        top: r.bottom + 8,
+        left,
+        width
+      });
+    }
+    setOpen(true);
+  };
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: "inline-flex",
+      verticalAlign: "middle"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    ref: btnRef,
+    type: "button",
+    "aria-label": `What is ${title || "this"}?`,
+    onClick: toggle,
+    className: "active:scale-90 transition-transform",
+    style: {
+      width: 22,
+      height: 22,
+      borderRadius: "50%",
+      flexShrink: 0,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 13,
+      fontWeight: 800,
+      lineHeight: 1,
+      fontStyle: "italic",
+      fontFamily: "Georgia, serif",
+      color: open ? "var(--bg)" : color,
+      backgroundColor: open ? color : "var(--panel)",
+      border: `1px solid ${open ? color : "var(--border)"}`,
+      padding: 0,
+      cursor: "pointer"
+    }
+  }, "i"), open && pos ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+    onClick: e => {
+      e.stopPropagation();
+      setOpen(false);
+    },
+    style: {
+      position: "fixed",
+      inset: 0,
+      zIndex: 60
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      position: "fixed",
+      zIndex: 61,
+      top: pos.top,
+      left: pos.left,
+      width: pos.width,
+      padding: "10px 12px",
+      backgroundColor: "var(--card)",
+      border: "1px solid var(--border)",
+      borderLeft: `3px solid ${color}`,
+      borderRadius: 8,
+      boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+      fontSize: 13,
+      lineHeight: 1.5,
+      fontWeight: 500,
+      fontStyle: "normal",
+      color: "var(--text2)",
+      textTransform: "none",
+      letterSpacing: 0,
+      whiteSpace: "normal"
+    }
+  }, title ? /*#__PURE__*/React.createElement("div", {
+    className: "font-bold mb-0.5",
+    style: {
+      color: "var(--text)"
+    }
+  }, title) : null, text)) : null);
+}
+
 // ============================================================
 // WORKOUT LOGGER
 // ============================================================
@@ -9057,11 +9179,17 @@ function Progress({
       }, /*#__PURE__*/React.createElement("div", {
         className: "flex-1"
       }, /*#__PURE__*/React.createElement("div", {
+        className: "flex items-center gap-1.5"
+      }, /*#__PURE__*/React.createElement("span", {
         className: "text-sm font-bold uppercase tracking-wide",
         style: {
           color: "var(--text2)"
         }
-      }, m.label), /*#__PURE__*/React.createElement("div", {
+      }, m.label), /*#__PURE__*/React.createElement(InfoTip, {
+        text: m.info,
+        title: m.label,
+        color: m.color
+      })), /*#__PURE__*/React.createElement("div", {
         className: "text-xs mt-1",
         style: {
           color: "var(--faint)"
@@ -9087,16 +9215,17 @@ function Progress({
     }, /*#__PURE__*/React.createElement("div", {
       className: "flex-1 min-w-0"
     }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-1.5"
+    }, /*#__PURE__*/React.createElement("span", {
       className: "text-sm font-bold uppercase tracking-wide",
       style: {
         color: "var(--text2)"
       }
-    }, m.label, neutral ? /*#__PURE__*/React.createElement("span", {
-      className: "ml-1.5 text-xs",
-      style: {
-        color: "var(--faint)"
-      }
-    }, "\xB7 info") : null), /*#__PURE__*/React.createElement("div", {
+    }, m.label), /*#__PURE__*/React.createElement(InfoTip, {
+      text: m.info,
+      title: m.label,
+      color: m.color
+    })), /*#__PURE__*/React.createElement("div", {
       className: "mt-1"
     }, /*#__PURE__*/React.createElement("span", {
       className: "text-3xl font-extrabold",
@@ -10356,12 +10485,20 @@ function CheckIn({
         border: "1px solid var(--border)",
         borderLeft: `3px solid ${m.color}`
       }
-    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "min-w-0 pr-2"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-1.5"
+    }, /*#__PURE__*/React.createElement("span", {
       className: "text-base font-bold",
       style: {
         color: "var(--text)"
       }
-    }, m.label, m.unit ? ` (${m.unit})` : ""), /*#__PURE__*/React.createElement("div", {
+    }, m.label, m.unit ? ` (${m.unit})` : ""), /*#__PURE__*/React.createElement(InfoTip, {
+      text: m.info,
+      title: m.label,
+      color: m.color
+    })), /*#__PURE__*/React.createElement("div", {
       className: "text-xs mt-0.5",
       style: {
         color: "var(--faint)"
