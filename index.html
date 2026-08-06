@@ -5958,10 +5958,22 @@ function computeStats(logs) {
     streak += 1;
     cursor.setDate(cursor.getDate() - 1);
   }
+  // Hard sets logged so far this (Monday-anchored) week — matches the Progress
+  // volume chart and the dashboard's "This Week" session grid. Warm-ups excluded.
+  const weekStart = startOfWeekMon(now);
+  let weekSets = 0;
+  logs.forEach(l => {
+    const d = new Date(l.date);
+    if (isNaN(d.getTime()) || d < weekStart) return;
+    (l.detail || []).forEach(ex => {
+      weekSets += (ex.sets || []).filter(s => s && s.done && !s.warmup).length;
+    });
+  });
   return {
     total,
     thisWeek,
-    streak
+    streak,
+    weekSets
   };
 }
 
@@ -6046,6 +6058,8 @@ const DEFAULT_SETTINGS = {
   targetDate: "2026-09-26",
   restAutoStart: true,
   restSound: true,
+  restNotify: false,
+  // lock-screen notification when rest is up — off until the user grants permission
   haptics: true,
   // buzz on set-complete and rest-timer-done (no-op where unsupported, e.g. iOS Safari)
   theme: "auto",
@@ -6392,6 +6406,61 @@ function dailyQuote() {
 // ============================================================
 // DASHBOARD
 // ============================================================
+// A thin circular progress ring with content in the middle. pct is 0–1.
+function ProgressRing({
+  pct,
+  size = 76,
+  stroke = 8,
+  color = BLUE,
+  children
+}) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(1, pct || 0));
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative",
+      width: size,
+      height: size,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: size,
+    height: size,
+    style: {
+      transform: "rotate(-90deg)"
+    }
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: size / 2,
+    cy: size / 2,
+    r: r,
+    fill: "none",
+    stroke: "var(--border)",
+    strokeWidth: stroke
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: size / 2,
+    cy: size / 2,
+    r: r,
+    fill: "none",
+    stroke: color,
+    strokeWidth: stroke,
+    strokeLinecap: "round",
+    strokeDasharray: c,
+    strokeDashoffset: c * (1 - clamped),
+    style: {
+      transition: "stroke-dashoffset .6s ease"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      inset: 0,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center"
+    }
+  }, children));
+}
 function Dashboard({
   onLaunch,
   onOpenGuide,
@@ -6411,9 +6480,13 @@ function Dashboard({
   onGoNutrition,
   checkins = [],
   dailyWeights = [],
-  onLogWeight
+  onLogWeight,
+  needsBackup = false,
+  daysSinceBackup = 0,
+  onBackup
 }) {
   const started = isPlanStarted(settings.startDate);
+  const [backupHidden, setBackupHidden] = useState(false); // "Later" hides it for this app session
   // Daily weigh-in — one number, smoothed into a 10-day trend so a salty dinner doesn't spook him
   const todayW = isoDay();
   const loggedToday = (dailyWeights || []).find(e => e.date === todayW);
@@ -6475,7 +6548,63 @@ function Dashboard({
   const focusAccent = weekFocus ? weekFocus.emphasis === "fatloss" ? MUSCLE_COLORS.Cardio : weekFocus.emphasis === "muscle" ? "#00E5C0" : BLUE : BLUE;
   return /*#__PURE__*/React.createElement("div", {
     className: "px-4 pb-28 pt-4"
+  }, needsBackup && !backupHidden && /*#__PURE__*/React.createElement("div", {
+    className: "mb-4 px-4 py-3",
+    style: {
+      backgroundColor: "var(--card)",
+      borderRadius: 6,
+      border: "1px solid #FFB020",
+      borderLeft: "4px solid #FFB020"
+    }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-start gap-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 18,
+      lineHeight: "22px"
+    }
+  }, "\uD83D\uDEDF"), /*#__PURE__*/React.createElement("div", {
+    className: "flex-1"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "var(--text)",
+      fontWeight: 700,
+      fontSize: 14
+    }
+  }, "Back up your training data"), /*#__PURE__*/React.createElement("div", {
+    className: "mt-0.5",
+    style: {
+      color: "var(--text2)",
+      fontSize: 12.5,
+      lineHeight: 1.4
+    }
+  }, "It's been ", daysSinceBackup, " days since your last saved copy. Your history lives only on this phone \u2014 a quick backup keeps it safe."), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 mt-2.5"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onBackup && onBackup(),
+    className: "active:opacity-80",
+    style: {
+      backgroundColor: "#FFB020",
+      color: "#1a1200",
+      fontWeight: 800,
+      fontSize: 13,
+      padding: "9px 16px",
+      borderRadius: 5,
+      minHeight: 44
+    }
+  }, "Back up now"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => setBackupHidden(true),
+    className: "active:opacity-80",
+    style: {
+      backgroundColor: "transparent",
+      color: "var(--muted2)",
+      fontWeight: 700,
+      fontSize: 13,
+      padding: "9px 12px",
+      borderRadius: 5,
+      minHeight: 44
+    }
+  }, "Later"))))), /*#__PURE__*/React.createElement("div", {
     className: "mb-5 px-3 text-center"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -6706,7 +6835,74 @@ function Dashboard({
     weekday: "short",
     month: "short",
     day: "numeric"
-  })}`)), tight && /*#__PURE__*/React.createElement("div", {
+  })}`)), started && (() => {
+    const ringPct = trainDays.length ? (doneWk + partialWk * 0.5) / trainDays.length : 0;
+    const sessionsLeft = remaining.length; // training days still to do (not skipped)
+    const allDone = doneWk >= trainDays.length;
+    const headline = allDone ? "Training week complete 🎉" : sessionsLeft === 0 ? "Nothing left on the board this week." : `${sessionsLeft} session${sessionsLeft === 1 ? "" : "s"} to go this week`;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-4 mb-3 px-4 py-4",
+      style: {
+        backgroundColor: "var(--card)",
+        borderRadius: 6,
+        border: "1px solid var(--border)"
+      }
+    }, /*#__PURE__*/React.createElement(ProgressRing, {
+      pct: ringPct,
+      color: focusAccent
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: FONT_HEAD,
+        fontSize: 22,
+        fontWeight: 900,
+        color: "var(--text)",
+        lineHeight: 1
+      }
+    }, doneWk, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        color: "var(--muted2)"
+      }
+    }, "/", trainDays.length)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 9,
+        fontWeight: 800,
+        letterSpacing: "0.08em",
+        color: "var(--muted2)",
+        textTransform: "uppercase",
+        marginTop: 2
+      }
+    }, "Days")), /*#__PURE__*/React.createElement("div", {
+      className: "flex-1",
+      style: {
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-sm font-bold",
+      style: {
+        color: "var(--text)",
+        lineHeight: 1.35
+      }
+    }, headline), /*#__PURE__*/React.createElement("div", {
+      className: "flex items-baseline gap-2 mt-2.5"
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontFamily: FONT_HEAD,
+        fontSize: 26,
+        fontWeight: 900,
+        color: "var(--text)",
+        lineHeight: 1
+      }
+    }, stats.weekSets || 0), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        color: "var(--muted2)",
+        textTransform: "uppercase"
+      }
+    }, "hard sets logged"))));
+  })(), tight && /*#__PURE__*/React.createElement("div", {
     className: "mb-3 px-4 py-3",
     style: {
       backgroundColor: "var(--card)",
@@ -7112,20 +7308,44 @@ function Workout({
     };
   }, []);
 
-  // Rest-timer countdown; beeps + buzzes at zero, then auto-dismisses
+  // Rest-timer countdown. Anchored to an absolute end time (endsAt) so it stays
+  // accurate even after iOS throttles/pauses timers while the app is backgrounded
+  // — on return to the foreground it catches up instantly. At zero it beeps,
+  // buzzes and (if enabled) posts a lock-screen notification, then auto-dismisses.
   useEffect(() => {
     if (!rest) return;
     if (rest.remaining <= 0) {
-      beep();
-      buzz([120, 60, 120]); // longer double-buzz when rest is up
       const t = setTimeout(() => setRest(null), 4000);
       return () => clearTimeout(t);
     }
-    const t = setTimeout(() => setRest(r => r ? {
-      ...r,
-      remaining: r.remaining - 1
-    } : r), 1000);
-    return () => clearTimeout(t);
+    const tick = () => {
+      const remaining = rest.endsAt != null ? Math.max(0, Math.ceil((rest.endsAt - Date.now()) / 1000)) : rest.remaining - 1;
+      if (remaining <= 0) {
+        beep();
+        buzz([120, 60, 120]); // longer double-buzz when rest is up
+        notifyRestDone(rest.name); // lock-screen banner so the screen can be off
+        setRest(r => r ? {
+          ...r,
+          remaining: 0
+        } : r);
+      } else {
+        setRest(r => r ? {
+          ...r,
+          remaining
+        } : r);
+      }
+    };
+    const t = setTimeout(tick, 500);
+    // Recompute the instant the app returns to the foreground, so a rest that
+    // elapsed while the phone was locked fires its alert right away.
+    const onVis = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [rest]);
 
   // Mirror the rest countdown into the tab title so it's readable with the phone
@@ -7180,8 +7400,33 @@ function Workout({
     setRest({
       remaining: secs,
       total: secs,
-      name
+      name,
+      endsAt: Date.now() + secs * 1000
     });
+  };
+  // Lock-screen alert when rest is up. Uses the phone's own notification (sound +
+  // haptic that work with the screen off), unlike the Web Audio beep. Only fires
+  // when the user has switched it on and granted permission; silently no-ops
+  // otherwise (older iOS, permission denied, etc.).
+  const notifyRestDone = name => {
+    if (!settings.restNotify) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    const body = name ? `${name} — time for your next set` : "Time for your next set";
+    const opts = {
+      body,
+      tag: "rest-done",
+      renotify: true,
+      icon: "icon-192.png",
+      badge: "icon-192.png",
+      vibrate: [120, 60, 120]
+    };
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+        navigator.serviceWorker.ready.then(reg => reg.showNotification("Rest's up 💪", opts)).catch(() => {});
+      } else {
+        new Notification("Rest's up 💪", opts);
+      }
+    } catch (e) {/* notifications unavailable */}
   };
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -7941,7 +8186,8 @@ function Workout({
   }, rest.name), /*#__PURE__*/React.createElement("button", {
     onClick: () => setRest(r => r ? {
       ...r,
-      remaining: r.remaining + 15
+      remaining: r.remaining + 15,
+      endsAt: (r.endsAt || Date.now()) + 15000
     } : r),
     className: "px-2 py-1 text-xs font-bold active:opacity-60",
     style: {
@@ -9259,6 +9505,210 @@ function SessionDetail({
   }, "Per-set detail wasn't recorded for this session. Exercises: ", (log.exercises || []).join(", ") || "—", ".")));
 }
 
+// ============================================================
+// SESSION RECAP — celebratory summary shown right after finishing
+// ============================================================
+function SessionRecap({
+  recap,
+  onClose
+}) {
+  const swipe = useSwipeBack(onClose, {
+    enter: true,
+    unmounts: true
+  });
+  if (!recap) return null;
+  const exs = recap.exercises || [];
+  // Tally the numbers worth celebrating: tonnage moved, hard sets, exercises hit.
+  let hardSets = 0,
+    volume = 0,
+    exCount = 0;
+  exs.forEach(ex => {
+    const done = (ex.sets || []).filter(s => s && s.done && !s.warmup);
+    if (done.length) exCount += 1;
+    done.forEach(s => {
+      hardSets += 1;
+      const w = parseFloat(s.weight),
+        r = parseFloat(s.reps);
+      if (!isNaN(w) && !isNaN(r) && w > 0) volume += (ex.each ? 2 : 1) * w * r; // both dumbbells count
+    });
+  });
+  const prs = recap.prs || [];
+  const complete = recap.complete;
+  const meta = [recap.date, recap.duration, recap.rating ? `Felt ${recap.rating}/10` : null].filter(Boolean).join(" · ");
+  const canShare = typeof navigator !== "undefined" && !!navigator.share;
+  const share = () => {
+    const lines = [`${recap.name} — ${recap.date}`, `${Math.round(volume).toLocaleString()} lb moved · ${hardSets} hard sets · ${recap.duration}`];
+    if (prs.length) lines.push(`🏆 New PR: ${prs.join(", ")}`);
+    try {
+      if (navigator.share) navigator.share({
+        text: lines.join("\n")
+      }).catch(() => {});
+    } catch (e) {}
+  };
+  const Tile = ({
+    value,
+    label,
+    color
+  }) => /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 px-2 py-3 text-center",
+    style: {
+      backgroundColor: "var(--card)",
+      borderRadius: 8,
+      border: "1px solid var(--border)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: FONT_HEAD,
+      fontSize: 26,
+      fontWeight: 900,
+      color: color || "var(--text)",
+      lineHeight: 1
+    }
+  }, value), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      fontWeight: 800,
+      letterSpacing: "0.06em",
+      color: "var(--muted2)",
+      textTransform: "uppercase",
+      marginTop: 5
+    }
+  }, label));
+  return /*#__PURE__*/React.createElement("div", _extends({
+    className: "fixed inset-0 z-50",
+    ref: swipe.ref
+  }, swipe.handlers, {
+    style: {
+      backgroundColor: "var(--bg)",
+      overflowY: "auto"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "sticky top-0 z-10 flex items-center justify-between px-4 py-3",
+    style: {
+      backgroundColor: "var(--bg)",
+      borderBottom: "1px solid var(--border)",
+      paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-sm font-bold uppercase tracking-wider",
+    style: {
+      color: complete ? "#22C55E" : "#FFB020"
+    }
+  }, complete ? "Workout Complete" : "Partial Saved"), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "text-sm font-extrabold uppercase tracking-wider active:opacity-60",
+    style: {
+      color: BLUE
+    }
+  }, "Done")), /*#__PURE__*/React.createElement("div", {
+    className: "px-4 pt-5 pb-16"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-center mb-5"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 40,
+      lineHeight: 1
+    }
+  }, prs.length ? "🏆" : complete ? "💪" : "✔"), /*#__PURE__*/React.createElement("div", {
+    className: "text-3xl font-extrabold leading-tight mt-2",
+    style: {
+      color: "var(--text)",
+      fontFamily: FONT_HEAD
+    }
+  }, recap.name), /*#__PURE__*/React.createElement("div", {
+    className: "text-sm mt-1",
+    style: {
+      color: "var(--muted2)"
+    }
+  }, meta)), prs.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "mb-4 px-4 py-3",
+    style: {
+      backgroundColor: "var(--card)",
+      borderRadius: 8,
+      border: "1px solid #FFB020",
+      borderLeft: "4px solid #FFB020"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-xs uppercase font-bold tracking-widest",
+    style: {
+      color: "#FFB020"
+    }
+  }, "New personal record", prs.length > 1 ? "s" : ""), /*#__PURE__*/React.createElement("div", {
+    className: "text-base font-bold mt-1",
+    style: {
+      color: "var(--text)",
+      lineHeight: 1.4
+    }
+  }, prs.join(", "))), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2.5 mb-6"
+  }, /*#__PURE__*/React.createElement(Tile, {
+    value: Math.round(volume).toLocaleString(),
+    label: "Lb Moved",
+    color: BLUE
+  }), /*#__PURE__*/React.createElement(Tile, {
+    value: hardSets,
+    label: "Hard Sets"
+  }), /*#__PURE__*/React.createElement(Tile, {
+    value: exCount,
+    label: "Exercises"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flex flex-col gap-2.5"
+  }, exs.filter(ex => (ex.sets || []).some(s => s && s.done && !s.warmup)).map((ex, i) => {
+    const c = MUSCLE_COLORS[ex.muscle] || BLUE;
+    const isPR = prs.includes(ex.name);
+    const best = ex.bestWeight != null && ex.bestReps != null ? `${ex.bestWeight}${ex.each ? "×2" : ""} lb × ${ex.bestReps}` : null;
+    const setCount = (ex.sets || []).filter(s => s && s.done && !s.warmup).length;
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      className: "flex items-center gap-3 px-4 py-3",
+      style: {
+        backgroundColor: "var(--card)",
+        borderRadius: 6,
+        border: "1px solid var(--border)",
+        borderLeft: `3px solid ${c}`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex-1",
+      style: {
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-1.5"
+    }, isPR && /*#__PURE__*/React.createElement("span", null, "\uD83C\uDFC6"), /*#__PURE__*/React.createElement("span", {
+      className: "text-base font-extrabold leading-tight truncate",
+      style: {
+        color: "var(--text)",
+        fontFamily: FONT_HEAD
+      }
+    }, ex.name)), /*#__PURE__*/React.createElement("div", {
+      className: "text-xs mt-0.5",
+      style: {
+        color: "var(--muted2)"
+      }
+    }, setCount, " set", setCount === 1 ? "" : "s", ex.muscle ? ` · ${ex.muscle}` : "")), best && /*#__PURE__*/React.createElement("div", {
+      className: "text-sm font-bold",
+      style: {
+        color: "var(--text2)",
+        whiteSpace: "nowrap"
+      }
+    }, best));
+  })), /*#__PURE__*/React.createElement("button", {
+    onClick: canShare ? share : onClose,
+    className: "w-full mt-6 py-3 text-base font-extrabold uppercase tracking-widest active:scale-95 transition-transform",
+    style: {
+      color: "#04120A",
+      backgroundColor: BLUE,
+      borderRadius: 6
+    }
+  }, canShare ? "Share 📤" : "Done"), canShare && /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-center mt-3",
+    style: {
+      color: "var(--faint)",
+      lineHeight: 1.4
+    }
+  }, "Or screenshot this to save the day's numbers.")));
+}
+
 // <<<GUIDE_EXTRA_START>>>
 // ---- How-to instructions for the bodyweight / band / kettlebell / machine accessories ----
 Object.assign(EXERCISE_GUIDE, {
@@ -10269,6 +10719,32 @@ function PlanSettings({
     setS(next);
     onSave(next);
   };
+  // Turning the lock-screen alert on asks the phone for notification permission
+  // (a one-time system prompt). If it's blocked we leave the toggle off so it
+  // never looks enabled while silently doing nothing.
+  const toggleRestNotify = () => {
+    if (s.restNotify) {
+      set("restNotify", false);
+      return;
+    }
+    if (typeof Notification === "undefined") {
+      set("restNotify", false);
+      return;
+    }
+    if (Notification.permission === "granted") {
+      set("restNotify", true);
+      return;
+    }
+    if (Notification.permission === "denied") {
+      set("restNotify", false);
+      return;
+    } // blocked at the OS level — can't re-prompt
+    try {
+      Notification.requestPermission().then(res => set("restNotify", res === "granted"));
+    } catch (e) {
+      set("restNotify", false);
+    }
+  };
   const weeks = planWeeks(s);
   const totalLoss = +(s.startWeight - s.goalWeight).toFixed(1);
   const pace = (totalLoss / weeks).toFixed(2);
@@ -10499,10 +10975,20 @@ function PlanSettings({
     on: s.restSound,
     onToggle: () => set("restSound", !s.restSound)
   }), /*#__PURE__*/React.createElement(ToggleRow, {
+    label: "Lock-screen rest alert",
+    on: s.restNotify,
+    onToggle: toggleRestNotify
+  }), /*#__PURE__*/React.createElement(ToggleRow, {
     label: "Vibration (buzz on set & rest done)",
     on: s.haptics,
     onToggle: () => set("haptics", !s.haptics)
-  })));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs mt-2",
+    style: {
+      color: "var(--muted2)",
+      lineHeight: 1.5
+    }
+  }, "Lock-screen alert posts a notification when your rest is up, so you'll get it with the screen off. Your phone asks permission the first time \u2014 allow it for this to work."));
 }
 
 // ============================================================
@@ -11699,6 +12185,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [guide, setGuide] = useState(null);
   const [detailLog, setDetailLog] = useState(null);
+  const [recap, setRecap] = useState(null); // celebratory summary overlay shown right after finishing a session
   const [undo, setUndo] = useState(null); // { message, restore, resume } — offered briefly after finishing / discarding
   const [resumeSession, setResumeSession] = useState(null); // seeds Workout when re-opened via Undo (consumed on mount)
   const [menuOpen, setMenuOpen] = useState(false);
@@ -11735,6 +12222,9 @@ function App() {
   });
   const [plan, setPlan] = useState(() => loadStore()?.plan || DEFAULT_PLAN_DAYS); // editable training split
   const [nutritionLog, setNutritionLog] = useState(() => loadStore()?.nutritionLog || {}); // date -> {calories,protein,carbs,fat}
+  // When data was last backed up. Seed to "now" on any existing/new install so the
+  // 14-day reminder clock starts fresh — nobody gets nagged the moment they update.
+  const [lastBackupAt, setLastBackupAt] = useState(() => loadStore()?.lastBackupAt ?? Date.now());
   // First-run gate: brand-new install shows the welcome flow; existing users skip it
   const [onboarded, setOnboarded] = useState(() => {
     const st = loadStore();
@@ -11762,9 +12252,10 @@ function App() {
       settings,
       plan,
       nutritionLog,
-      onboarded
+      onboarded,
+      lastBackupAt
     });
-  }, [perf, logs, checkins, dailyWeights, weekFocus, strength, weekPlan, prefs, gyms, activeGymId, settings, plan, nutritionLog, onboarded]);
+  }, [perf, logs, checkins, dailyWeights, weekFocus, strength, weekPlan, prefs, gyms, activeGymId, settings, plan, nutritionLog, onboarded, lastBackupAt]);
   const logNutrition = (day, key, value) => setNutritionLog(prev => ({
     ...prev,
     [day]: {
@@ -12055,6 +12546,16 @@ function App() {
     setActiveDay(null);
     setResumeSession(null);
     setTab("history");
+    // Celebratory recap over the top — tonnage, PRs and best sets for the session
+    setRecap({
+      name: summary.day.name,
+      date: dateStr,
+      duration,
+      rating: summary.rating,
+      complete,
+      prs: prNames,
+      exercises: summary.exercises || []
+    });
     // The Undo bar carries the confirmation message and a one-tap revert
     setUndo({
       message: prNames.length ? `🏆 New PR — ${prNames.join(", ")}! ${summary.day.name} logged` : complete ? `💪 ${summary.day.name} logged${summary.rating ? ` · rated ${summary.rating}/10` : ""} — weights tuned` : `✔ Partial ${summary.day.name} saved`,
@@ -12098,6 +12599,7 @@ function App() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      setLastBackupAt(Date.now()); // resets the "back up your data" reminder clock
       setToast("✅ Backup downloaded");
       setTimeout(() => setToast(""), 2500);
     } catch (e) {
@@ -12182,10 +12684,15 @@ function App() {
   const bProgress = bSpan > 0 ? Math.max(0, Math.min(100, (settings.startWeight - curWeight) / bSpan * 100)) : 0;
   const nutrition = computeNutrition(settings, checkins);
 
+  // Backup reminder — only nag once there's real training history to lose, and only
+  // after it's been a fortnight since the last saved copy (iOS can evict site data).
+  const daysSinceBackup = Math.floor((Date.now() - lastBackupAt) / 86400000);
+  const needsBackup = onboarded && logs.length > 0 && daysSinceBackup >= 14;
+
   // <<<SWIPE_APP_START>>>
   // Swipe right anywhere → drag the page away and land back on Home
   const pageSwipe = useSwipeBack(() => setTab("dashboard"), {
-    enabled: onboarded && tab !== "dashboard" && !menuOpen && !guide && !detailLog && !showTest
+    enabled: onboarded && tab !== "dashboard" && !menuOpen && !guide && !detailLog && !showTest && !recap
   });
   // <<<SWIPE_APP_END>>>
 
@@ -12334,7 +12841,10 @@ function App() {
     onGoNutrition: () => setTab("nutrition"),
     checkins: checkins,
     dailyWeights: dailyWeights,
-    onLogWeight: logDailyWeight
+    onLogWeight: logDailyWeight,
+    needsBackup: needsBackup,
+    daysSinceBackup: daysSinceBackup,
+    onBackup: exportData
   }), tab === "calendar" && /*#__PURE__*/React.createElement(Calendar, {
     onLaunch: launch,
     logs: logs,
@@ -12437,7 +12947,7 @@ function App() {
     style: {
       color: "var(--muted)"
     }
-  }, "\u2715")), onboarded && !menuOpen && !guide && !detailLog && !showTest && /*#__PURE__*/React.createElement("button", {
+  }, "\u2715")), onboarded && !menuOpen && !guide && !detailLog && !showTest && !recap && /*#__PURE__*/React.createElement("button", {
     onClick: () => setMenuOpen(true),
     "aria-label": "Open navigation menu",
     style: {
@@ -12477,6 +12987,9 @@ function App() {
     settings: settings,
     baseline: checkins[0],
     onComplete: completeOnboarding
+  }), recap && /*#__PURE__*/React.createElement(SessionRecap, {
+    recap: recap,
+    onClose: () => setRecap(null)
   }), detailLog && /*#__PURE__*/React.createElement(SessionDetail, {
     log: detailLog,
     onClose: () => setDetailLog(null),

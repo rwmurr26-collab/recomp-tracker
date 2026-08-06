@@ -16,7 +16,7 @@
  *     fresh deploy shows the moment there is any connectivity, and airplane mode
  *     still falls back to the cached copy.
  */
-const VERSION = "43791685c26e";
+const VERSION = "fba23578e618";
 const CACHE = "recomp-" + VERSION;
 const PRECACHE = ["./","./index.html","./manifest.json","./icon-192.png","./icon-512.png","./icon-180.png"];
 const NAV_TIMEOUT_MS = 2500;
@@ -35,6 +35,17 @@ self.addEventListener("activate", (event) => {
     const keys = await caches.keys();
     await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
     await self.clients.claim();
+  })());
+});
+
+// Tapping a rest-timer notification jumps back into the app (focus an open
+// window if there is one, otherwise open a fresh one) rather than a blank tab.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) { if ("focus" in c) return c.focus(); }
+    if (self.clients.openWindow) return self.clients.openWindow("./");
   })());
 });
 
