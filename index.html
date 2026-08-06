@@ -6651,8 +6651,8 @@ function Dashboard({
     unit: "\uD83D\uDD25"
   }), /*#__PURE__*/React.createElement(StatBox, {
     label: "This Week",
-    value: stats.thisWeek,
-    unit: `/6`
+    value: started ? doneWk + partialWk : 0,
+    unit: `/${trainDays.length || TRAINING_ORDER.length}`
   }), /*#__PURE__*/React.createElement(StatBox, {
     label: "Total",
     value: stats.total
