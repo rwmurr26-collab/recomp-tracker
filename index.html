@@ -6051,7 +6051,8 @@ function estimateMinutes(day) {
 // Goal config for the weight-vs-pace chart
 // ---- Editable plan settings (defaults; user overrides them on the Plan page) ----
 const DEFAULT_SETTINGS = {
-  planName: "Ryan's Training",
+  planName: "Fitness Plan",
+  // generic default; a returning user's saved name is kept via the settings merge
   startWeight: 180.6,
   goalWeight: 170,
   startDate: "2026-07-26",
@@ -6518,8 +6519,11 @@ function Dashboard({
     month: "short",
     day: "numeric"
   });
-  // This week's session progress + catch-up read
-  const trainDays = TRAINING_ORDER.map(id => PLAN.find(p => p.id === id));
+  // This week's session progress + catch-up read. Only count the training days
+  // that actually fall on or after the start date within this week — if you start
+  // mid-week, the earlier days aren't yours to do, so a 4-day plan begun Thursday
+  // reads 0/2, not 0/4. This is the same date filter the day cards below use.
+  const trainDays = TRAINING_ORDER.map(id => PLAN.find(p => p.id === id)).filter(d => d && dateForWeekday(d.weekday) >= startD0);
   const statusOf = id => sessionStatus(weekPlan, id);
   const doneWk = trainDays.filter(d => statusOf(d.id) === "done").length;
   const partialWk = trainDays.filter(d => statusOf(d.id) === "partial").length;
@@ -6831,12 +6835,12 @@ function Dashboard({
     style: {
       color: "var(--muted)"
     }
-  }, started ? `${doneWk}/${trainDays.length} done${partialWk ? ` · ${partialWk} partial` : ""}` : `Starts ${fmtDate(settings.startDate, {
+  }, started ? trainDays.length ? `${doneWk}/${trainDays.length} done${partialWk ? ` · ${partialWk} partial` : ""}` : "Fresh plan Sunday" : `Starts ${fmtDate(settings.startDate, {
     weekday: "short",
     month: "short",
     day: "numeric"
-  })}`)), started && (() => {
-    const ringPct = trainDays.length ? (doneWk + partialWk * 0.5) / trainDays.length : 0;
+  })}`)), started && trainDays.length > 0 && (() => {
+    const ringPct = (doneWk + partialWk * 0.5) / trainDays.length;
     const sessionsLeft = remaining.length; // training days still to do (not skipped)
     const allDone = doneWk >= trainDays.length;
     const headline = allDone ? "Training week complete 🎉" : sessionsLeft === 0 ? "Nothing left on the board this week." : `${sessionsLeft} session${sessionsLeft === 1 ? "" : "s"} to go this week`;
@@ -12013,7 +12017,8 @@ function Onboarding({
 }) {
   const [step, setStep] = useState(0);
   const [d, setD] = useState({
-    planName: settings.planName || "My Plan",
+    planName: "",
+    // left blank on purpose — the field shows a "Fitness Plan" placeholder and defaults to it if untouched
     goalType: settings.goalType || "Recomp",
     daysPerWeek: settings.daysPerWeek || 4,
     experience: settings.experience || "Beginner",
@@ -12102,7 +12107,33 @@ function Onboarding({
       color: "var(--text)",
       fontFamily: FONT_HEAD
     }
-  }, "What are you training for?"), /*#__PURE__*/React.createElement(SegRow, {
+  }, "What are you training for?"), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center justify-between px-4 py-3 mb-4",
+    style: {
+      backgroundColor: "var(--card)",
+      borderRadius: 6,
+      border: "1px solid var(--border)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-base font-bold",
+    style: {
+      color: "var(--text)"
+    }
+  }, "Plan name"), /*#__PURE__*/React.createElement("input", {
+    value: d.planName,
+    onChange: e => set("planName", e.target.value),
+    placeholder: "Fitness Plan",
+    maxLength: 40,
+    className: "px-3 py-2 text-base font-bold outline-none",
+    style: {
+      width: 180,
+      backgroundColor: "var(--bg)",
+      color: "var(--text)",
+      borderRadius: 5,
+      border: "1px solid var(--border)",
+      textAlign: "right"
+    }
+  })), /*#__PURE__*/React.createElement(SegRow, {
     label: "Training goal",
     options: ["Fat Loss", "Muscle", "Recomp", "Strength"],
     value: d.goalType,
@@ -12354,6 +12385,7 @@ function App() {
       ...settings,
       ...draftSettings
     };
+    ns.planName = (ns.planName || "").trim() || "Fitness Plan"; // untouched / blank → the generic default
     if (!ns.startDate) ns.startDate = iso(today);
     if (!ns.targetDate) ns.targetDate = iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 56)); // ~8 weeks
     const scanWeight = scan && scan.weight > 0 ? scan.weight : null;
@@ -12752,7 +12784,7 @@ function App() {
       color: "var(--text)",
       fontFamily: FONT_HEAD
     }
-  }, (settings.planName || "My Training").toUpperCase())), /*#__PURE__*/React.createElement("div", {
+  }, (settings.planName || "Fitness Plan").toUpperCase())), /*#__PURE__*/React.createElement("div", {
     className: "text-right flex-shrink-0 ml-2"
   }, /*#__PURE__*/React.createElement("div", {
     className: "flex items-baseline gap-1 justify-end"
